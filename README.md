@@ -1,5 +1,7 @@
 # Factorio AI Engineer 🏭🤖
 
+[English](README.md) | [Русский](README.ru.md)
+
 An autonomous AI agent playing **Factorio 2.0 (Space Age)** in real-time using Large Language Models (Gemini / OpenAI API / Local LLMs via Kobold.cpp).
 
 Unlike pure computer-vision approaches, this project uses a high-precision **spatial coordinate system**, interactive environment scanning, and a hybrid task-queue architecture. The AI agent inspects surrounding entities, evaluates recipes and inventory, and constructs working automated production lines directly on the map.
