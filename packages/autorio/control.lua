@@ -3,6 +3,18 @@
 local ____modules = {}
 local ____moduleCache = {}
 local ____originalRequire = require
+
+local function get_target_player(player_id)
+    if player_id then
+        local p = game.get_player(player_id)
+        if p and p.connected then return p end
+    end
+    if #game.connected_players > 0 then
+        return game.connected_players[1]
+    end
+    return nil
+end
+
 local function build_safe_entity_filter(target_name, center_pos, radius, force)
     local filter = {
         position = center_pos,
@@ -269,17 +281,6 @@ end
 local ____exports = {}
 local ____inventory = require("utils.inventory")
 local get_inventory_items = ____inventory.get_inventory_items
-
-local function get_target_player(player_id)
-    if player_id then
-        local p = game.get_player(player_id)
-        if p and p.connected then return p end
-    end
-    if #game.connected_players > 0 then
-        return game.connected_players[1]
-    end
-    return nil
-end
 
 function ____exports.create_tools_remote_interface(self)
     remote.add_interface(
