@@ -76,7 +76,7 @@ Run the prebuilt Go RCON-to-HTTP container:
 docker run --rm -it --name factorio-rcon-api \
   -e FACTORIO_RCON_HOST=127.0.0.1 \
   -e FACTORIO_RCON_PORT=27015 \
-  -e FACTORIO_RCON_PASSWORD=4real \
+  -e FACTORIO_RCON_PASSWORD=your_rcon_password \
   -p 24180:24180 \
   factorio-rcon-api:local
 ```
@@ -90,8 +90,12 @@ pnpm --filter ./packages/factorio-wrapper run dev
 ### 5. Configure & Start AI Agent
 Create `packages/agent/.env.local`:
 ```env
-OPENAI_API_KEY=your_gemini_or_openai_api_key
-OPENAI_API_BASEURL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_API_KEY=your_api_key
+# Examples:
+# Gemini: [https://generativelanguage.googleapis.com/v1beta/openai/](https://generativelanguage.googleapis.com/v1beta/openai/)
+# OpenRouter: [https://openrouter.ai/api/v1/](https://openrouter.ai/api/v1/)
+# Local (Kobold.cpp): [http://127.0.0.1:5001/v1/](http://127.0.0.1:5001/v1/)
+OPENAI_API_BASEURL=your_api_base_url
 
 RCON_API_SERVER_PORT=24180
 RCON_API_SERVER_HOST=127.0.0.1
