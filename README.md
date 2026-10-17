@@ -1,99 +1,126 @@
-<p align="center">
-  <picture>
-    <img width="100%" src="./docs/banner-1280x640.png" />
-  </picture>
-</p>
+# Factorio AI Engineer 🏭🤖
 
-<h1 align="center">
-  Factorio for <a href="https://github.com/moeru-ai/airi">Project AIRI</a>
-</h1>
+An autonomous AI agent playing **Factorio 2.0 (Space Age)** in real-time using Large Language Models (Gemini / OpenAI API / Local LLMs via Kobold.cpp).
 
-> [!NOTE]
->
-> This project is part of the [Project AIRI](https://github.com/moeru-ai/airi), we aim to build a wishing to achieve [Neuro-sama](https://www.youtube.com/@Neurosama)'s (subscribe if you didn't!) altitude, completely LLM and AI driven, capable of realtime voice chat, Minecraft playing, Factorio playing. If you are interested in, please do give it a try on [live demo](https://airi.moeru.ai).
+Unlike pure computer-vision approaches, this project uses a high-precision **spatial coordinate system**, interactive environment scanning, and a hybrid task-queue architecture. The AI agent inspects surrounding entities, evaluates recipes and inventory, and constructs working automated production lines directly on the map.
 
-## Development
+---
 
-### Project Structure
+## 🌟 Key Features & Improvements
 
-It's hard to describe the project structure in a few words, but it currently looks like this:
+- **Spatial Coordinate Engine**: Custom mod operations (`walk_to(x, y)`, `place_entity(name, x, y, dir)`, `move_items(..., x, y)`) allowing sub-tile precision rather than blind target chasing.
+- **Environment & Player Scanning (`scanEntities`)**:
+  - Dynamic radar scan returning exact `(x, y)` world coordinates of nearby entities.
+  - Automatically identifies and returns the player's position (`player.x`, `player.y`) to build relative structures ("east of my position").
+  - Clustered resource filtering (condenses massive ore patches from 10k+ tokens down to compact reference points).
+- **Factorio 2.0 Direction Standard**: Full support for 16-way entity orientation (North: `0`, East: `4`, South: `8`, West: `12`).
+- **Autonomous Reasoning & Multi-step Queues**:
+  - Automatically checks inventory and crafts missing dependencies before construction.
+  - Queues sequential tasks (e.g., *Craft Furnaces -> Walk -> Place in a row -> Fuel with Coal*) via in-game tick events.
+- **Safe Dynamic Entity Resolution**: Built-in translation for colloquial concepts (`tree`, `rocks`, `ore`, `enemy`) with fallback protection to prevent server crashes on unknown names.
+- **Silent Operations (`/sc`)**: Clean in-game experience without command-echo spam in chat.
+- **Fast Cloud & Local Model Support**: Works out of the box with Gemini 2.5 Flash / Flash-Lite via OpenAI-compatible API, as well as local Kobold.cpp / Ollama instances.
 
-<div style="max-width: 500px; margin: 0 auto;">
+---
 
-![project-structure](./project-structure.png)
+## 🏗️ Architecture
 
-</div>
+```
+                 +---------------------------+
+                 |   Player / In-Game Chat   |
+                 +-------------+-------------+
+                               | (Player messages / In-game events)
+                               v
++------------------+   WebSocket   +--------------------+
+| Factorio Mod     | <-----------> | factorio-wrapper   |
+| (__autorio__)    |    (8080)     | (Node.js bridge)   |
++--------+---------+               +---------+----------+
+         ^                                   |
+         | RCON commands                     | Forward events
+         v                                   v
++------------------+   HTTP POST   +--------------------+
+| factorio-rcon-api| <-----------> | packages/agent     |
+| (Docker bridge)  |    (24180)    | (TypeScript / LLM) |
++------------------+               +---------+----------+
+                                             |
+                                             v
+                                   +--------------------+
+                                   |  LLM Inference     |
+                                   |  (Gemini / OpenAI) |
+                                   +--------------------+
+```
 
-### Start to develop
+---
 
-1. Clone the repository:
+## 🚀 Quick Start Guide
 
-    ```bash
-    git clone https://github.com/moeru-ai/airi-factorio
-    ```
+### 1. Prerequisites
+- **Factorio** (version 2.0+ recommended)
+- **Node.js** (v22+ or v24+) with **pnpm**
+- **Docker Desktop** (for the RCON HTTP gateway)
 
-2. Install dependencies:
+### 2. Install Mod
+Copy the mod folder into your Factorio mods directory:
+```cmd
+xcopy /E /I packages\autorio C:\Games\FactorioHeadless\mods\autorio
+:: Also copy to your game client mods folder:
+xcopy /E /I packages\autorio %appdata%\Factorio\mods\autorio
+```
+*(Ensure no conflicting `autorio_*.zip` archives exist in the mods folder).*
 
-    ```bash
-    pnpm i
-    ```
+### 3. Start RCON API Gateway (Docker)
+Run the prebuilt Go RCON-to-HTTP container:
+```bash
+docker run --rm -it --name factorio-rcon-api \
+  -e FACTORIO_RCON_HOST=127.0.0.1 \
+  -e FACTORIO_RCON_PORT=27015 \
+  -e FACTORIO_RCON_PASSWORD=4real \
+  -p 24180:24180 \
+  factorio-rcon-api:local
+```
 
-3. Create a symlink for the `autorio` mod:
+### 4. Start Factorio Server & Wrapper
+In the project root:
+```bash
+pnpm --filter ./packages/factorio-wrapper run dev
+```
 
-    ```bash
-    cd /path/to/airi-factorio
+### 5. Configure & Start AI Agent
+Create `packages/agent/.env.local`:
+```env
+OPENAI_API_KEY=your_gemini_or_openai_api_key
+OPENAI_API_BASEURL=https://generativelanguage.googleapis.com/v1beta/openai/
 
-    ln -s /path/to/airi-factorio/packages/autorio/dist /path/to/factorio/data/autorio
-    # If you are using DevContainer, you can use the following command:
-    ln -s /workspace/airi-factorio/packages/autorio/dist /opt/factorio/data/autorio
-    ```
+RCON_API_SERVER_PORT=24180
+RCON_API_SERVER_HOST=127.0.0.1
 
-4. Copy and fill the `.env` file:
+FACTORIO_WS_PORT=8080
+FACTORIO_WS_HOST=127.0.0.1
+```
 
-    ```bash
-    cp packages/agent/.env.example packages/agent/.env.local
-    cp packages/factorio-wrapper/.env.example packages/factorio-wrapper/.env.local
-    ```
+Start the agent:
+```bash
+cd packages/agent
+pnpm dlx tsx --env-file=.env.local src/main.ts
+```
 
-    If you are using DevContainer, you can set `WS_SERVER_HOST` and `FACTORIO_WS_HOST` and `RCON_API_SERVER_HOST` to `localhost`.
+---
 
-5. Create a game save file, the save file path should be the same as the one in the `.env` file:
+## 💬 In-Game Example Commands
 
-    ```bash
-    /path/to/factorio/bin/x64/factorio --create /path/to/factorio/the-save-file.zip
-    # If you are using DevContainer, you can use the following command:
-    /opt/factorio/bin/x64/factorio --create /path/to/factorio/the-save-file.zip
-    # If your machine is not x64, you can use the following command:
-    box64 /opt/factorio/bin/x64/factorio --create /path/to/factorio/the-save-file.zip
-    ```
+Connect to your local server (`127.0.0.1:34197`) and type in chat:
 
-6. Run the development script:
+- **Environmental Awareness:**
+  > *"Scan area with radius 10 and tell me what you see"*
+- **Autonomous Construction & Crafting:**
+  > *"Check my inventory. If I have less than 3 stone furnaces, craft what is needed. Then scan the area and place 3 stone furnaces in a row starting 2 tiles east of my position."*
+- **Automated Production Cell:**
+  > *"Place 1 burner mining drill at -76.5, -108.5 facing south, place 1 stone furnace at -76.5, -106.5, and put 5 coal into both."*
+- **Targeted Resource Gathering:**
+  > *"Cut 5 trees around you"*
 
-    ```bash
-    pnpm run dev
-    ```
+---
 
-Now you can use the commands in Factorio, the script will be compiled automatically, but you need to exit and re-enter the game to see the changes(no need to restart the game).
-
-## Other side projects born from Project AIRI like this one
-
-- [Awesome AI VTuber](https://github.com/proj-airi/awesome-ai-vtuber): A curated list of AI VTubers and related projects
-- [`unspeech`](https://github.com/moeru-ai/unspeech): Universal endpoint proxy server for `/audio/transcriptions` and `/audio/speech`, like LiteLLM but for any ASR and TTS
-- [`hfup`](https://github.com/moeru-ai/hfup): tools to help on deploying, bundling to HuggingFace Spaces
-- [`xsai-transformers`](https://github.com/moeru-ai/xsai-transformers): Experimental [🤗 Transformers.js](https://github.com/huggingface/transformers.js) provider for [xsAI](https://github.com/moeru-ai/xsai).
-- [WebAI: Realtime Voice Chat](https://github.com/proj-airi/webai-realtime-voice-chat): Full example of implementing ChatGPT's realtime voice from scratch with VAD + STT + LLM + TTS.
-- [`@proj-airi/drizzle-duckdb-wasm`](https://github.com/moeru-ai/airi/tree/main/packages/drizzle-duckdb-wasm/README.md): Drizzle ORM driver for DuckDB WASM
-- [`@proj-airi/duckdb-wasm`](https://github.com/moeru-ai/airi/tree/main/packages/duckdb-wasm/README.md): Easy to use wrapper for `@duckdb/duckdb-wasm`
-- [Airi Factorio](https://github.com/moeru-ai/airi-factorio): Allow Airi to play Factorio
-- [Factorio RCON API](https://github.com/nekomeowww/factorio-rcon-api): RESTful API wrapper for Factorio headless server console
-- [`autorio`](https://github.com/moeru-ai/airi-factorio/tree/main/packages/autorio): Factorio automation library
-- [`tstl-plugin-reload-factorio-mod`](https://github.com/moeru-ai/airi-factorio/tree/main/packages/tstl-plugin-reload-factorio-mod): Reload Factorio mod when developing
-- [`@velin-dev/ml`](https://github.com/luoling8192/velin): Use Vue SFC and Markdown to write easy to manage stateful prompts for LLM
-- [`demodel`](https://github.com/moeru-ai/demodel): Easily boost the speed of pulling your models and datasets from various of inference runtimes.
-- [`inventory`](https://github.com/moeru-ai/inventory): Centralized model catalog and default provider configurations backend service
-- [MCP Launcher](https://github.com/moeru-ai/mcp-launcher): Easy to use MCP builder & launcher for all possible MCP servers, just like Ollama for models!
-- [🥺 SAD](https://github.com/moeru-ai/sad): Documentation and notes for self-host and browser running LLMs.
-
-## Credits
-
-Thanks for the original idea and code: https://github.com/naklecha/factorio-automation
+## 📜 Credits & License
+- Based on foundational research and mod bridge concepts from [moeru-ai/airi-factorio](https://github.com/moeru-ai/airi-factorio).
+- Licensed under the [MIT License](LICENSE).
