@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package apis.factorioapi.v1;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/nekomeowww/factorio-rcon-api/v2/apis/factorioapi/v1";
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Factorio RCON API";
+    description: "API wrapper over Factorio's RCON protocol. **This is the v1 version of the API, made for Factorio <2.x. For players and developers on Factorio 2.x (especially with Space Age DLC), you should use v2 endpoints.**";
+    version: "1.0";
+  };
+  responses: {
+    key: "500";
+    value: {
+      description: "Internal Server Error";
+      schema: {
+        json_schema: {ref: ".apis.jsonapi.ErrorObject"}
+      }
+    }
+  }
+  responses: {
+    key: "503";
+    value: {
+      description: "Service Unavailable";
+      schema: {
+        json_schema: {ref: ".apis.jsonapi.ErrorObject"}
+      }
+    }
+  }
+};

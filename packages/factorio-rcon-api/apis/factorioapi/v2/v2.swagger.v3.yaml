@@ -1,0 +1,3700 @@
+components:
+  schemas:
+    factorioapiv1CommandAdminsResponse:
+      properties:
+        admins:
+          description: The list of admins.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv1Player'
+          type: array
+      type: object
+    factorioapiv1CommandAlertsResponse:
+      properties:
+        alerts:
+          description: The list of alerts.
+          example: Hello
+          items:
+            type: string
+          type: array
+      type: object
+    factorioapiv1CommandBanRequest:
+      properties:
+        username:
+          description: The username to ban.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandBanResponse:
+      type: object
+    factorioapiv1CommandBansResponse:
+      properties:
+        bans:
+          description: The list of bans.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv1Player'
+          type: array
+      type: object
+    factorioapiv1CommandDemoteRequest:
+      properties:
+        username:
+          description: The username to demote.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandDemoteResponse:
+      type: object
+    factorioapiv1CommandEnableResearchQueueRequest:
+      type: object
+    factorioapiv1CommandEnableResearchQueueResponse:
+      type: object
+    factorioapiv1CommandEvolutionResponse:
+      properties:
+        evolutionFactor:
+          description: The current alien evolution factor.
+          example: 0.1
+          format: double
+          type: number
+        pollution:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+        spawnerKills:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+        time:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+      type: object
+    factorioapiv1CommandIgnoreRequest:
+      properties:
+        username:
+          description: The username to ignore.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandIgnoreResponse:
+      type: object
+    factorioapiv1CommandKickRequest:
+      properties:
+        reason:
+          description: The reason for the kick.
+          example: Reason
+          type: string
+        username:
+          description: The username to kick.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandKickResponse:
+      type: object
+    factorioapiv1CommandMessageRequest:
+      properties:
+        message:
+          description: The message to send.
+          example: Hello
+          type: string
+      type: object
+    factorioapiv1CommandMessageResponse:
+      type: object
+    factorioapiv1CommandMuteProgrammableSpeakerForEveryoneRequest:
+      type: object
+    factorioapiv1CommandMuteProgrammableSpeakerForEveryoneResponse:
+      type: object
+    factorioapiv1CommandMuteRequest:
+      properties:
+        username:
+          description: The username to mute.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandMuteResponse:
+      type: object
+    factorioapiv1CommandMutesResponse:
+      properties:
+        mutes:
+          description: The list of mutes.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv1Player'
+          type: array
+      type: object
+    factorioapiv1CommandPermissionsAddPlayerRequest:
+      properties:
+        group:
+          description: The group to add.
+          example: admin
+          type: string
+        username:
+          description: The username to add.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandPermissionsAddPlayerResponse:
+      type: object
+    factorioapiv1CommandPermissionsCreateGroupRequest:
+      properties:
+        group:
+          description: The group to create.
+          example: admin
+          type: string
+      type: object
+    factorioapiv1CommandPermissionsCreateGroupResponse:
+      type: object
+    factorioapiv1CommandPermissionsDeleteGroupRequest:
+      properties:
+        group:
+          description: The group to delete.
+          example: admin
+          type: string
+      type: object
+    factorioapiv1CommandPermissionsDeleteGroupResponse:
+      type: object
+    factorioapiv1CommandPermissionsEditGroupRequest:
+      properties:
+        action:
+          description: The action to take.
+          example: add
+          type: string
+        group:
+          description: The group to edit.
+          example: admin
+          type: string
+        value:
+          description: The value to set.
+          example: true
+          type: boolean
+      type: object
+    factorioapiv1CommandPermissionsEditGroupResponse:
+      type: object
+    factorioapiv1CommandPermissionsGetPlayerGroupResponse:
+      properties:
+        groups:
+          description: The list of groups.
+          example: admin
+          items:
+            type: string
+          type: array
+      type: object
+    factorioapiv1CommandPermissionsRemovePlayerGroupRequest:
+      properties:
+        group:
+          description: The group to remove.
+          example: admin
+          type: string
+        username:
+          description: The username to remove.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandPermissionsRemovePlayerGroupResponse:
+      type: object
+    factorioapiv1CommandPermissionsRenameGroupRequest:
+      properties:
+        group:
+          description: The group to rename.
+          example: admin
+          type: string
+        newGroup:
+          description: The new group name.
+          example: admin2
+          type: string
+      type: object
+    factorioapiv1CommandPermissionsRenameGroupResponse:
+      type: object
+    factorioapiv1CommandPermissionsResponse:
+      type: object
+    factorioapiv1CommandPlayersResponse:
+      properties:
+        players:
+          description: The list of players.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv1Player'
+          type: array
+      type: object
+    factorioapiv1CommandPromoteRequest:
+      properties:
+        username:
+          description: The username to promote.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandPromoteResponse:
+      type: object
+    factorioapiv1CommandPurgeRequest:
+      properties:
+        username:
+          description: The username to purge.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandPurgeResponse:
+      type: object
+    factorioapiv1CommandRawRequest:
+      properties:
+        input:
+          description: The input for the command. For example, it will be formatted and executed with `/c game.player.zoom=0.1`.
+          example: /c game.player.zoom=0.1
+          type: string
+      type: object
+    factorioapiv1CommandRawResponse:
+      properties:
+        output:
+          description: The output from the command.
+          example: Ok
+          type: string
+      type: object
+    factorioapiv1CommandResetTipsRequest:
+      type: object
+    factorioapiv1CommandResetTipsResponse:
+      type: object
+    factorioapiv1CommandSeedResponse:
+      properties:
+        seed:
+          description: The map seed.
+          example: "123456"
+          type: string
+      type: object
+    factorioapiv1CommandServerSaveRequest:
+      type: object
+    factorioapiv1CommandServerSaveResponse:
+      type: object
+    factorioapiv1CommandTimeResponse:
+      properties:
+        time:
+          description: Get info about how old the map is, in seconds.
+          example: 10
+          format: double
+          type: number
+      type: object
+    factorioapiv1CommandToggleActionLoggingRequest:
+      type: object
+    factorioapiv1CommandToggleActionLoggingResponse:
+      type: object
+    factorioapiv1CommandToggleHeavyModeRequest:
+      type: object
+    factorioapiv1CommandToggleHeavyModeResponse:
+      type: object
+    factorioapiv1CommandUnbanRequest:
+      properties:
+        username:
+          description: The username to unban.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandUnbanResponse:
+      type: object
+    factorioapiv1CommandUnignoreRequest:
+      properties:
+        username:
+          description: The username to unignore.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandUnignoreResponse:
+      type: object
+    factorioapiv1CommandUnlockShortcutBarRequest:
+      type: object
+    factorioapiv1CommandUnlockShortcutBarResponse:
+      type: object
+    factorioapiv1CommandUnlockTipsRequest:
+      type: object
+    factorioapiv1CommandUnlockTipsResponse:
+      type: object
+    factorioapiv1CommandUnmuteProgrammableSpeakerForEveryoneRequest:
+      type: object
+    factorioapiv1CommandUnmuteProgrammableSpeakerForEveryoneResponse:
+      type: object
+    factorioapiv1CommandUnmuteRequest:
+      properties:
+        username:
+          description: The username to unmute.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandUnmuteResponse:
+      type: object
+    factorioapiv1CommandVersionResponse:
+      properties:
+        version:
+          description: The version of the current Factorio game server.
+          example: 1.1.0
+          type: string
+      type: object
+    factorioapiv1CommandWhisperRequest:
+      properties:
+        message:
+          description: The message to whisper.
+          example: Hello
+          type: string
+        username:
+          description: The username to whisper.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandWhisperResponse:
+      type: object
+    factorioapiv1CommandWhitelistAddRequest:
+      properties:
+        username:
+          description: The username to add to the whitelist.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandWhitelistAddResponse:
+      type: object
+    factorioapiv1CommandWhitelistClearRequest:
+      type: object
+    factorioapiv1CommandWhitelistClearResponse:
+      type: object
+    factorioapiv1CommandWhitelistGetResponse:
+      properties:
+        whitelist:
+          description: The list of whitelist.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv1Player'
+          type: array
+      type: object
+    factorioapiv1CommandWhitelistRemoveRequest:
+      properties:
+        username:
+          description: The username to remove from the whitelist.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv1CommandWhitelistRemoveResponse:
+      type: object
+    factorioapiv1Player:
+      properties:
+        online:
+          description: Whether the admin is online.
+          example: true
+          type: boolean
+        username:
+          description: The username of the admin.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandAdminsResponse:
+      properties:
+        admins:
+          description: The list of admins.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv2Player'
+          type: array
+      type: object
+    factorioapiv2CommandAlertsResponse:
+      properties:
+        alerts:
+          description: The list of alerts.
+          example: Hello
+          items:
+            type: string
+          type: array
+      type: object
+    factorioapiv2CommandBanRequest:
+      properties:
+        username:
+          description: The username to ban.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandBanResponse:
+      type: object
+    factorioapiv2CommandBansResponse:
+      properties:
+        bans:
+          description: The list of bans.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv2Player'
+          type: array
+      type: object
+    factorioapiv2CommandDemoteRequest:
+      properties:
+        username:
+          description: The username to demote.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandDemoteResponse:
+      type: object
+    factorioapiv2CommandEnableResearchQueueRequest:
+      type: object
+    factorioapiv2CommandEnableResearchQueueResponse:
+      type: object
+    factorioapiv2CommandEvolutionResponse:
+      properties:
+        evolutions:
+          description: The list of evolutions.
+          items:
+            $ref: '#/components/schemas/v2Evolution'
+          type: array
+      type: object
+    factorioapiv2CommandIgnoreRequest:
+      properties:
+        username:
+          description: The username to ignore.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandIgnoreResponse:
+      type: object
+    factorioapiv2CommandKickRequest:
+      properties:
+        reason:
+          description: The reason for the kick.
+          example: Reason
+          type: string
+        username:
+          description: The username to kick.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandKickResponse:
+      type: object
+    factorioapiv2CommandMessageRequest:
+      properties:
+        message:
+          description: The message to send.
+          example: Hello
+          type: string
+      type: object
+    factorioapiv2CommandMessageResponse:
+      type: object
+    factorioapiv2CommandMuteProgrammableSpeakerForEveryoneRequest:
+      type: object
+    factorioapiv2CommandMuteProgrammableSpeakerForEveryoneResponse:
+      type: object
+    factorioapiv2CommandMuteRequest:
+      properties:
+        username:
+          description: The username to mute.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandMuteResponse:
+      type: object
+    factorioapiv2CommandMutesResponse:
+      properties:
+        mutes:
+          description: The list of mutes.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv2Player'
+          type: array
+      type: object
+    factorioapiv2CommandPermissionsAddPlayerRequest:
+      properties:
+        group:
+          description: The group to add.
+          example: admin
+          type: string
+        username:
+          description: The username to add.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandPermissionsAddPlayerResponse:
+      type: object
+    factorioapiv2CommandPermissionsCreateGroupRequest:
+      properties:
+        group:
+          description: The group to create.
+          example: admin
+          type: string
+      type: object
+    factorioapiv2CommandPermissionsCreateGroupResponse:
+      type: object
+    factorioapiv2CommandPermissionsDeleteGroupRequest:
+      properties:
+        group:
+          description: The group to delete.
+          example: admin
+          type: string
+      type: object
+    factorioapiv2CommandPermissionsDeleteGroupResponse:
+      type: object
+    factorioapiv2CommandPermissionsEditGroupRequest:
+      properties:
+        action:
+          description: The action to take.
+          example: add
+          type: string
+        group:
+          description: The group to edit.
+          example: admin
+          type: string
+        value:
+          description: The value to set.
+          example: true
+          type: boolean
+      type: object
+    factorioapiv2CommandPermissionsEditGroupResponse:
+      type: object
+    factorioapiv2CommandPermissionsGetPlayerGroupResponse:
+      properties:
+        groups:
+          description: The list of groups.
+          example: admin
+          items:
+            type: string
+          type: array
+      type: object
+    factorioapiv2CommandPermissionsRemovePlayerGroupRequest:
+      properties:
+        group:
+          description: The group to remove.
+          example: admin
+          type: string
+        username:
+          description: The username to remove.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandPermissionsRemovePlayerGroupResponse:
+      type: object
+    factorioapiv2CommandPermissionsRenameGroupRequest:
+      properties:
+        group:
+          description: The group to rename.
+          example: admin
+          type: string
+        newGroup:
+          description: The new group name.
+          example: admin2
+          type: string
+      type: object
+    factorioapiv2CommandPermissionsRenameGroupResponse:
+      type: object
+    factorioapiv2CommandPermissionsResponse:
+      type: object
+    factorioapiv2CommandPlayersResponse:
+      properties:
+        players:
+          description: The list of players.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv2Player'
+          type: array
+      type: object
+    factorioapiv2CommandPromoteRequest:
+      properties:
+        username:
+          description: The username to promote.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandPromoteResponse:
+      type: object
+    factorioapiv2CommandPurgeRequest:
+      properties:
+        username:
+          description: The username to purge.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandPurgeResponse:
+      type: object
+    factorioapiv2CommandRawRequest:
+      properties:
+        input:
+          description: The input for the command. For example, it will be formatted and executed with `/c game.player.zoom=0.1`.
+          example: /c game.player.zoom=0.1
+          type: string
+      type: object
+    factorioapiv2CommandRawResponse:
+      properties:
+        output:
+          description: The output from the command.
+          example: Ok
+          type: string
+      type: object
+    factorioapiv2CommandResetTipsRequest:
+      type: object
+    factorioapiv2CommandResetTipsResponse:
+      type: object
+    factorioapiv2CommandSeedResponse:
+      properties:
+        seed:
+          description: The map seed.
+          example: "123456"
+          type: string
+      type: object
+    factorioapiv2CommandServerSaveRequest:
+      type: object
+    factorioapiv2CommandServerSaveResponse:
+      type: object
+    factorioapiv2CommandTimeResponse:
+      properties:
+        time:
+          description: Get info about how old the map is, in seconds.
+          example: 10
+          format: double
+          type: number
+      type: object
+    factorioapiv2CommandToggleActionLoggingRequest:
+      type: object
+    factorioapiv2CommandToggleActionLoggingResponse:
+      type: object
+    factorioapiv2CommandToggleHeavyModeRequest:
+      type: object
+    factorioapiv2CommandToggleHeavyModeResponse:
+      type: object
+    factorioapiv2CommandUnbanRequest:
+      properties:
+        username:
+          description: The username to unban.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandUnbanResponse:
+      type: object
+    factorioapiv2CommandUnignoreRequest:
+      properties:
+        username:
+          description: The username to unignore.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandUnignoreResponse:
+      type: object
+    factorioapiv2CommandUnlockShortcutBarRequest:
+      type: object
+    factorioapiv2CommandUnlockShortcutBarResponse:
+      type: object
+    factorioapiv2CommandUnlockTipsRequest:
+      type: object
+    factorioapiv2CommandUnlockTipsResponse:
+      type: object
+    factorioapiv2CommandUnmuteProgrammableSpeakerForEveryoneRequest:
+      type: object
+    factorioapiv2CommandUnmuteProgrammableSpeakerForEveryoneResponse:
+      type: object
+    factorioapiv2CommandUnmuteRequest:
+      properties:
+        username:
+          description: The username to unmute.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandUnmuteResponse:
+      type: object
+    factorioapiv2CommandVersionResponse:
+      properties:
+        version:
+          description: The version of the current Factorio game server.
+          example: 1.1.0
+          type: string
+      type: object
+    factorioapiv2CommandWhisperRequest:
+      properties:
+        message:
+          description: The message to whisper.
+          example: Hello
+          type: string
+        username:
+          description: The username to whisper.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandWhisperResponse:
+      type: object
+    factorioapiv2CommandWhitelistAddRequest:
+      properties:
+        username:
+          description: The username to add to the whitelist.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandWhitelistAddResponse:
+      type: object
+    factorioapiv2CommandWhitelistClearRequest:
+      type: object
+    factorioapiv2CommandWhitelistClearResponse:
+      type: object
+    factorioapiv2CommandWhitelistGetResponse:
+      properties:
+        whitelist:
+          description: The list of whitelist.
+          example: nekomeowww
+          items:
+            $ref: '#/components/schemas/factorioapiv2Player'
+          type: array
+      type: object
+    factorioapiv2CommandWhitelistRemoveRequest:
+      properties:
+        username:
+          description: The username to remove from the whitelist.
+          example: nekomeowww
+          type: string
+      type: object
+    factorioapiv2CommandWhitelistRemoveResponse:
+      type: object
+    factorioapiv2Player:
+      properties:
+        online:
+          description: Whether the admin is online.
+          example: true
+          type: boolean
+        username:
+          description: The username of the admin.
+          example: nekomeowww
+          type: string
+      type: object
+    jsonapiErrorObject:
+      properties:
+        code:
+          description: an application-specific error code, expressed as a string value.
+          example: USER_UPDATE_FAILED
+          type: string
+        detail:
+          description: a human-readable explanation specific to this occurrence of the problem. Like title.
+          example: A field under /user/age is not correct, should be 'number' instead of 'string'
+          type: string
+        id:
+          description: a unique identifier for this particular occurrence of the problem.
+          example: BAD_REQUEST
+          type: string
+        links:
+          $ref: '#/components/schemas/jsonapiLinks'
+        meta:
+          additionalProperties:
+            $ref: '#/components/schemas/protobufAny'
+          description: a meta object containing non-standard meta-information about the error.
+          type: object
+        source:
+          $ref: '#/components/schemas/jsonapiErrorObjectSource'
+        status:
+          description: the HTTP status code applicable to this problem, expressed as a string value.
+          example: "400"
+          format: int64
+          type: integer
+        title:
+          example: Failed to update user's profile, invalid parameter(s) detected
+          title: a short, human-readable summary of the problem
+          type: string
+      type: object
+    jsonapiErrorObjectSource:
+      properties:
+        header:
+          description: a string indicating the name of a single request header which caused the error.
+          example: X-SOME-HEADER
+          type: string
+        parameter:
+          description: a string indicating which URI query parameter caused the error.
+          example: created_at.ASC
+          type: string
+        pointer:
+          description: |-
+            a JSON Pointer [RFC6901] to the value in the request document that caused the error
+            [e.g. "/data" for a primary data object, or "/data/attributes/title" for a specific attribute].
+          example: /user/age
+          type: string
+      type: object
+    jsonapiLinks:
+      description: Where specified, a links member can be used to represent links.
+      properties:
+        describedby:
+          description: a link to a description document (e.g. OpenAPI or JSON Schema) for the link target.
+          example: OpenAPI
+          type: string
+        href:
+          description: a string whose value is a URI-reference [RFC3986 Section 4.1] pointing to the link’s target.
+          example: https://apidocs.example.com/errors/BAD_REQUEST
+          type: string
+        hreflang:
+          description: |-
+            a string or an array of strings indicating the language(s) of the link’s target.
+            An array of strings indicates that the link’s target is available in multiple languages.
+          example: en-US
+          type: string
+        meta:
+          additionalProperties:
+            $ref: '#/components/schemas/protobufAny'
+          description: a meta object containing non-standard meta-information about the link.
+          type: object
+        rel:
+          description: a string indicating the link’s relation type.
+          example: external
+          type: string
+        title:
+          description: |-
+            a string which serves as a label for the destination of a link
+            such that it can be used as a human-readable identifier (e.g., a menu entry).
+          example: Learn more about BAD_REQUEST
+          type: string
+        type:
+          description: a string indicating the media type of the link’s target.
+          example: text/html
+          type: string
+      type: object
+    protobufAny:
+      additionalProperties: {}
+      description: |-
+        `Any` contains an arbitrary serialized protocol buffer message along with a
+        URL that describes the type of the serialized message.
+
+        Protobuf library provides support to pack/unpack Any values in the form
+        of utility functions or additional generated methods of the Any type.
+
+        Example 1: Pack and unpack a message in C++.
+
+            Foo foo = ...;
+            Any any;
+            any.PackFrom(foo);
+            ...
+            if (any.UnpackTo(&foo)) {
+              ...
+            }
+
+        Example 2: Pack and unpack a message in Java.
+
+            Foo foo = ...;
+            Any any = Any.pack(foo);
+            ...
+            if (any.is(Foo.class)) {
+              foo = any.unpack(Foo.class);
+            }
+            // or ...
+            if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+              foo = any.unpack(Foo.getDefaultInstance());
+            }
+
+         Example 3: Pack and unpack a message in Python.
+
+            foo = Foo(...)
+            any = Any()
+            any.Pack(foo)
+            ...
+            if any.Is(Foo.DESCRIPTOR):
+              any.Unpack(foo)
+              ...
+
+         Example 4: Pack and unpack a message in Go
+
+             foo := &pb.Foo{...}
+             any, err := anypb.New(foo)
+             if err != nil {
+               ...
+             }
+             ...
+             foo := &pb.Foo{}
+             if err := any.UnmarshalTo(foo); err != nil {
+               ...
+             }
+
+        The pack methods provided by protobuf library will by default use
+        'type.googleapis.com/full.type.name' as the type URL and the unpack
+        methods only use the fully qualified type name after the last '/'
+        in the type URL, for example "foo.bar.com/x/y.z" will yield type
+        name "y.z".
+
+        JSON
+        ====
+        The JSON representation of an `Any` value uses the regular
+        representation of the deserialized, embedded message, with an
+        additional field `@type` which contains the type URL. Example:
+
+            package google.profile;
+            message Person {
+              string first_name = 1;
+              string last_name = 2;
+            }
+
+            {
+              "@type": "type.googleapis.com/google.profile.Person",
+              "firstName": <string>,
+              "lastName": <string>
+            }
+
+        If the embedded message type is well-known and has a custom JSON
+        representation, that representation will be embedded adding a field
+        `value` which holds the custom JSON in addition to the `@type`
+        field. Example (for message [google.protobuf.Duration][]):
+
+            {
+              "@type": "type.googleapis.com/google.protobuf.Duration",
+              "value": "1.212s"
+            }
+      properties:
+        '@type':
+          description: |-
+            A URL/resource name that uniquely identifies the type of the serialized
+            protocol buffer message. This string must contain at least
+            one "/" character. The last segment of the URL's path must represent
+            the fully qualified name of the type (as in
+            `path/google.protobuf.Duration`). The name should be in a canonical form
+            (e.g., leading "." is not accepted).
+
+            In practice, teams usually precompile into the binary all types that they
+            expect it to use in the context of Any. However, for URLs which use the
+            scheme `http`, `https`, or no scheme, one can optionally set up a type
+            server that maps type URLs to message definitions as follows:
+
+            * If no scheme is provided, `https` is assumed.
+            * An HTTP GET on the URL must yield a [google.protobuf.Type][]
+              value in binary format, or produce an error.
+            * Applications are allowed to cache lookup results based on the
+              URL, or have them precompiled into a binary to avoid any
+              lookup. Therefore, binary compatibility needs to be preserved
+              on changes to types. (Use versioned type names to manage
+              breaking changes.)
+
+            Note: this functionality is not currently available in the official
+            protobuf release, and it is not used for type URLs beginning with
+            type.googleapis.com. As of May 2023, there are no widely used type server
+            implementations and no plans to implement one.
+
+            Schemes other than `http`, `https` (or the empty scheme) might be
+            used with implementation specific semantics.
+          type: string
+      type: object
+    v2CommandEvolutionGetResponse:
+      properties:
+        evolution:
+          $ref: '#/components/schemas/v2Evolution'
+      type: object
+    v2Evolution:
+      properties:
+        evolutionFactor:
+          description: The current alien evolution factor.
+          example: 0.1
+          format: double
+          type: number
+        pollution:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+        spawnerKills:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+        surfaceName:
+          example: Nauvis
+          title: The surface name
+          type: string
+        time:
+          example: 10
+          format: double
+          title: in percentage
+          type: number
+      type: object
+info:
+  description: API wrapper over Factorio's RCON protocol. **This is the v1 version of the API, made for Factorio <2.x. For players and developers on Factorio 2.x (especially with Space Age DLC), you should use v2 endpoints.**
+  title: Factorio RCON API
+  version: "1.0"
+openapi: 3.0.3
+paths:
+  /api/v1/factorio/console/command/admins:
+    get:
+      description: Get the list of admins.
+      operationId: v1_factorio_console_command_admins_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandAdminsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of admins.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/alerts:
+    get:
+      description: Get the list of alerts.
+      operationId: v1_factorio_console_command_alerts_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandAlertsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of alerts.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/ban:
+    post:
+      description: Ban a player.
+      operationId: v1_factorio_console_command_ban_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandBanRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandBanResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Ban a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/bans:
+    get:
+      description: Get the list of bans.
+      operationId: v1_factorio_console_command_bans_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandBansResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of bans.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/demote:
+    post:
+      description: Demote a player.
+      operationId: v1_factorio_console_command_demote_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandDemoteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandDemoteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Demote a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/enable-research-queue:
+    post:
+      description: Enable the research queue.
+      operationId: v1_factorio_console_command_enableResearch_queue_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandEnableResearchQueueRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandEnableResearchQueueResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Enable the research queue.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/evolution:
+    get:
+      description: Get info about the alien evolution factor.
+      operationId: v1_factorio_console_command_evolution_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandEvolutionResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get info about the alien evolution factor.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/ignore:
+    post:
+      description: Ignore a player.
+      operationId: v1_factorio_console_command_ignore_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandIgnoreRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandIgnoreResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Ignore a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/kick:
+    post:
+      description: Kick a player.
+      operationId: v1_factorio_console_command_kick_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandKickRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandKickResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Kick a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/message:
+    post:
+      description: Send a message to all players.
+      operationId: v1_factorio_console_command_message_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandMessageRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandMessageResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Send a message to all players.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/mute:
+    post:
+      description: Mute a player.
+      operationId: v1_factorio_console_command_mute_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandMuteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandMuteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Mute a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/mute-programmable-speaker-for-everyone:
+    post:
+      description: Mute all programmable speakers.
+      operationId: v1_factorio_console_command_muteProgrammableSpeakerForEveryone_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandMuteProgrammableSpeakerForEveryoneRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandMuteProgrammableSpeakerForEveryoneResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Mute all programmable speakers.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/mutes:
+    get:
+      description: Get the list of mutes.
+      operationId: v1_factorio_console_command_mutes_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandMutesResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of mutes.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/permissions:
+    get:
+      description: Get the list of permissions.
+      operationId: v1_factorio_console_command_permissions_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of permissions.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/permissions/group:
+    delete:
+      description: Delete a group.
+      operationId: v1_factorio_console_command_permissionsGroup_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsDeleteGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsDeleteGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Delete a group.
+      tags:
+        - Console
+    patch:
+      description: Edit a group.
+      operationId: v1_factorio_console_command_permissionsGroup_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsEditGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsEditGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Edit a group.
+      tags:
+        - Console
+    post:
+      description: Create a group.
+      operationId: v1_factorio_console_command_permissionsGroup_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsCreateGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsCreateGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Create a group.
+      tags:
+        - Console
+    put:
+      description: Rename a group.
+      operationId: v1_factorio_console_command_permissionsGroup_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsRenameGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsRenameGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Rename a group.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/permissions/group/player:
+    delete:
+      description: Remove a player from a group.
+      operationId: v1_factorio_console_command_permissionsGroupPlayer_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsRemovePlayerGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsRemovePlayerGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Remove a player from a group.
+      tags:
+        - Console
+    post:
+      description: Add a player to a group.
+      operationId: v1_factorio_console_command_permissionsGroupPlayer_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPermissionsAddPlayerRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsAddPlayerResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Add a player to a group.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/permissions/group/players:
+    get:
+      description: Get the groups for a player.
+      operationId: v1_factorio_console_command_permissionsGroupPlayers_get
+      parameters:
+        - description: The username to get the groups for.
+          in: query
+          name: username
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPermissionsGetPlayerGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the groups for a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/players:
+    get:
+      description: Get the list of players.
+      operationId: v1_factorio_console_command_players_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPlayersResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of players.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/promote:
+    post:
+      description: Promote a player.
+      operationId: v1_factorio_console_command_promote_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPromoteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPromoteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Promote a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/purge:
+    post:
+      description: Purge a player.
+      operationId: v1_factorio_console_command_purge_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandPurgeRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandPurgeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Purge a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/raw:
+    post:
+      description: Executes a Lua command (if allowed).
+      operationId: v1_factorio_console_command_raw_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandRawRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandRawResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Executes a Lua command (if allowed).
+      tags:
+        - Console
+  /api/v1/factorio/console/command/reset-tips:
+    post:
+      description: Reset the tips.
+      operationId: v1_factorio_console_command_resetTips_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandResetTipsRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandResetTipsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Reset the tips.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/seed:
+    get:
+      description: Get the map seed.
+      operationId: v1_factorio_console_command_seed_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandSeedResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the map seed.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/server-save:
+    post:
+      description: Save the game.
+      operationId: v1_factorio_console_command_serverSave_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandServerSaveRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandServerSaveResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Save the game.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/time:
+    get:
+      description: Get the current game time.
+      operationId: v1_factorio_console_command_time_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandTimeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the current game time.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/toggle-action-logging:
+    post:
+      description: Toggle the action logging.
+      operationId: v1_factorio_console_command_toggleActionLogging_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandToggleActionLoggingRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandToggleActionLoggingResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Toggle the action logging.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/toggle-heavy-mode:
+    post:
+      description: Toggle the heavy mode.
+      operationId: v1_factorio_console_command_toggleHeavyMode_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandToggleHeavyModeRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandToggleHeavyModeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Toggle the heavy mode.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unban:
+    post:
+      description: Unban a player.
+      operationId: v1_factorio_console_command_unban_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnbanRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnbanResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unban a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unignore:
+    post:
+      description: Unignore a player.
+      operationId: v1_factorio_console_command_unignore_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnignoreRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnignoreResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unignore a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unlock-shortcut-bar:
+    post:
+      description: Unlock the shortcut bar.
+      operationId: v1_factorio_console_command_unlockShortcutBar_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnlockShortcutBarRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnlockShortcutBarResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unlock the shortcut bar.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unlock-tips:
+    post:
+      description: Unlock the tips.
+      operationId: v1_factorio_console_command_unlockTips_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnlockTipsRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnlockTipsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unlock the tips.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unmute:
+    post:
+      description: Unmute a player.
+      operationId: v1_factorio_console_command_unmute_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnmuteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnmuteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unmute a player.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/unmute-programmable-speaker-for-everyone:
+    post:
+      description: Unmute all programmable speakers.
+      operationId: v1_factorio_console_command_unmuteProgrammableSpeakerForEveryone_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandUnmuteProgrammableSpeakerForEveryoneRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandUnmuteProgrammableSpeakerForEveryoneResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unmute all programmable speakers.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/version:
+    get:
+      description: Get the version of the current Factorio game server.
+      operationId: v1_factorio_console_command_version_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandVersionResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the version of the current Factorio game server.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/whisper:
+    post:
+      description: Whisper a message.
+      operationId: v1_factorio_console_command_whisper_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandWhisperRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandWhisperResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Whisper a message.
+      tags:
+        - Console
+  /api/v1/factorio/console/command/whitelist:
+    delete:
+      description: Clear the whitelist.
+      operationId: v1_factorio_console_command_whitelist_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandWhitelistClearRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandWhitelistClearResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Clear the whitelist.
+      tags:
+        - Console
+    get:
+      description: Get the list of whitelist.
+      operationId: v1_factorio_console_command_whitelist_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandWhitelistGetResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of whitelist.
+      tags:
+        - Console
+    patch:
+      description: Remove a player from the whitelist.
+      operationId: v1_factorio_console_command_whitelist_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandWhitelistRemoveRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandWhitelistRemoveResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Remove a player from the whitelist.
+      tags:
+        - Console
+    post:
+      description: Add a player to the whitelist.
+      operationId: v1_factorio_console_command_whitelist_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv1CommandWhitelistAddRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv1CommandWhitelistAddResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Add a player to the whitelist.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/admins:
+    get:
+      description: Get the list of admins.
+      operationId: v2_factorio_console_command_admins_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandAdminsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of admins.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/alerts:
+    get:
+      description: Get the list of alerts.
+      operationId: v2_factorio_console_command_alerts_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandAlertsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of alerts.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/ban:
+    post:
+      description: Ban a player.
+      operationId: v2_factorio_console_command_ban_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandBanRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandBanResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Ban a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/bans:
+    get:
+      description: Get the list of bans.
+      operationId: v2_factorio_console_command_bans_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandBansResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of bans.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/demote:
+    post:
+      description: Demote a player.
+      operationId: v2_factorio_console_command_demote_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandDemoteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandDemoteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Demote a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/enable-research-queue:
+    post:
+      description: Enable the research queue.
+      operationId: v2_factorio_console_command_enableResearchQueue_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandEnableResearchQueueRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandEnableResearchQueueResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Enable the research queue.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/evolution:
+    get:
+      description: Get info about the alien evolution factor.
+      operationId: v2_factorio_console_command_evolution_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandEvolutionResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get info about the alien evolution factor.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/evolution/{surfaceName}:
+    get:
+      description: Get info about the alien evolution factor by sepecific surface name. Equavalent to `/evolution <surface_name>` command in Factorio.
+      operationId: v2_factorio_console_command_evolution_surface_name_get
+      parameters:
+        - description: The surface name
+          in: path
+          name: surfaceName
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v2CommandEvolutionGetResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Alien evolution factor by surface name.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/ignore:
+    post:
+      description: Ignore a player.
+      operationId: v2_factorio_console_command_ignore_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandIgnoreRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandIgnoreResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Ignore a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/kick:
+    post:
+      description: Kick a player.
+      operationId: v2_factorio_console_command_kick_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandKickRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandKickResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Kick a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/message:
+    post:
+      description: Send a message to all players.
+      operationId: v2_factorio_console_command_message_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandMessageRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandMessageResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Send a message to all players.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/mute:
+    post:
+      description: Mute a player.
+      operationId: v2_factorio_console_command_mute_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandMuteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandMuteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Mute a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/mute-programmable-speaker-for-everyone:
+    post:
+      description: Mute all programmable speakers.
+      operationId: v2_factorio_console_command_muteProgrammableSpeakerForEveryone_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandMuteProgrammableSpeakerForEveryoneRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandMuteProgrammableSpeakerForEveryoneResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Mute all programmable speakers.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/mutes:
+    get:
+      description: Get the list of mutes.
+      operationId: v2_factorio_console_command_mutes_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandMutesResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of mutes.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/permissions:
+    get:
+      description: Get the list of permissions.
+      operationId: v2_factorio_console_command_permissions_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of permissions.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/permissions/group:
+    delete:
+      description: Delete a group.
+      operationId: v2_factorio_console_command_permissions_group_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsDeleteGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsDeleteGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Delete a group.
+      tags:
+        - Console
+    patch:
+      description: Edit a group.
+      operationId: v2_factorio_console_command_permissions_group_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsEditGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsEditGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Edit a group.
+      tags:
+        - Console
+    post:
+      description: Create a group.
+      operationId: v2_factorio_console_command_permissions_group_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsCreateGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsCreateGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Create a group.
+      tags:
+        - Console
+    put:
+      description: Rename a group.
+      operationId: v2_factorio_console_command_permissions_group_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsRenameGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsRenameGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Rename a group.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/permissions/group/player:
+    delete:
+      description: Remove a player from a group.
+      operationId: v2_factorio_console_command_permissions_group_player_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsRemovePlayerGroupRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsRemovePlayerGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Remove a player from a group.
+      tags:
+        - Console
+    post:
+      description: Add a player to a group.
+      operationId: v2_factorio_console_command_permissions_group_player_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPermissionsAddPlayerRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsAddPlayerResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Add a player to a group.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/permissions/group/players:
+    get:
+      description: Get the groups for a player.
+      operationId: v2_factorio_console_command_permissions_group_players_get
+      parameters:
+        - description: The username to get the groups for.
+          in: query
+          name: username
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPermissionsGetPlayerGroupResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the groups for a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/players:
+    get:
+      description: Get the list of players.
+      operationId: v2_factorio_console_command_players_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPlayersResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of players.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/promote:
+    post:
+      description: Promote a player.
+      operationId: v2_factorio_console_command_promote_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPromoteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPromoteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Promote a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/purge:
+    post:
+      description: Purge a player.
+      operationId: v2_factorio_console_command_purge_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandPurgeRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandPurgeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Purge a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/raw:
+    post:
+      description: Executes a Lua command (if allowed).
+      operationId: v2_factorio_console_command_raw_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandRawRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandRawResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Executes a Lua command (if allowed).
+      tags:
+        - Console
+  /api/v2/factorio/console/command/reset-tips:
+    post:
+      description: Reset the tips.
+      operationId: v2_factorio_console_command_resetTips_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandResetTipsRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandResetTipsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Reset the tips.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/seed:
+    get:
+      description: Get the map seed.
+      operationId: v2_factorio_console_command_seed_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandSeedResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the map seed.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/server-save:
+    post:
+      description: Save the game.
+      operationId: v2_factorio_console_command_serverSave_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandServerSaveRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandServerSaveResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Save the game.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/time:
+    get:
+      description: Get the current game time.
+      operationId: v2_factorio_console_command_time_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandTimeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the current game time.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/toggle-action-logging:
+    post:
+      description: Toggle the action logging.
+      operationId: v2_factorio_console_command_toggleActionLogging_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandToggleActionLoggingRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandToggleActionLoggingResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Toggle the action logging.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/toggle-heavy-mode:
+    post:
+      description: Toggle the heavy mode.
+      operationId: v2_factorio_console_command_toggleHeavyMode_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandToggleHeavyModeRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandToggleHeavyModeResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Toggle the heavy mode.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unban:
+    post:
+      description: Unban a player.
+      operationId: v2_factorio_console_command_unban_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnbanRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnbanResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unban a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unignore:
+    post:
+      description: Unignore a player.
+      operationId: v2_factorio_console_command_unignore_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnignoreRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnignoreResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unignore a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unlock-shortcut-bar:
+    post:
+      description: Unlock the shortcut bar.
+      operationId: v2_factorio_console_command_unlockShortcutBar_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnlockShortcutBarRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnlockShortcutBarResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unlock the shortcut bar.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unlock-tips:
+    post:
+      description: Unlock the tips.
+      operationId: v2_factorio_console_command_unlockTips_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnlockTipsRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnlockTipsResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unlock the tips.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unmute:
+    post:
+      description: Unmute a player.
+      operationId: v2_factorio_console_command_unmute_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnmuteRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnmuteResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unmute a player.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/unmute-programmable-speaker-for-everyone:
+    post:
+      description: Unmute all programmable speakers.
+      operationId: v2_factorio_console_command_unmuteProgrammableSpeakerForEveryone_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandUnmuteProgrammableSpeakerForEveryoneRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandUnmuteProgrammableSpeakerForEveryoneResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Unmute all programmable speakers.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/version:
+    get:
+      description: Get the version of the current Factorio game server.
+      operationId: v2_factorio_console_command_version_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandVersionResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the version of the current Factorio game server.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/whisper:
+    post:
+      description: Whisper a message.
+      operationId: v2_factorio_console_command_whisper_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandWhisperRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandWhisperResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Whisper a message.
+      tags:
+        - Console
+  /api/v2/factorio/console/command/whitelist:
+    delete:
+      description: Clear the whitelist.
+      operationId: v2_factorio_console_command_whitelist_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandWhitelistClearRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandWhitelistClearResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Clear the whitelist.
+      tags:
+        - Console
+    get:
+      description: Get the list of whitelist.
+      operationId: v2_factorio_console_command_whitelist_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandWhitelistGetResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Get the list of whitelist.
+      tags:
+        - Console
+    patch:
+      description: Remove a player from the whitelist.
+      operationId: v2_factorio_console_command_whitelist_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandWhitelistRemoveRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandWhitelistRemoveResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Remove a player from the whitelist.
+      tags:
+        - Console
+    post:
+      description: Add a player to the whitelist.
+      operationId: v2_factorio_console_command_whitelist_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/factorioapiv2CommandWhitelistAddRequest'
+        required: true
+        x-originalParamName: body
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/factorioapiv2CommandWhitelistAddResponse'
+          description: A successful response.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonapiErrorObject'
+          description: Service Unavailable
+      summary: Add a player to the whitelist.
+      tags:
+        - Console

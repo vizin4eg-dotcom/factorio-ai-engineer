@@ -1,0 +1,45 @@
+{
+  "name": "factorio-rcon-api-client",
+  "type": "module",
+  "version": "2.1.4",
+  "packageManager": "pnpm@10.24.0",
+  "description": "Generated TypeScript SDK client for https://github.com/nekomeowww/factorio-rcon-api",
+  "author": {
+    "name": "Neko Ayaka",
+    "email": "neko@ayaka.moe",
+    "url": "https://github.com/nekomeowww"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nekomeowww/factorio-rcon-api.git",
+    "directory": "apis/sdk/typescript"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "README.md",
+    "dist",
+    "package.json"
+  ],
+  "scripts": {
+    "openapi-ts": "openapi-ts",
+    "build": "pnpm run openapi-ts && tsdown",
+    "package:publish": "pnpm build && pnpm publish --access public --no-git-checks"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^6.0.0",
+    "@hey-api/openapi-ts": "^0.88.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-format": "^1.0.2",
+    "tsdown": "^0.16.0"
+  }
+}

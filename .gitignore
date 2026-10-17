@@ -1,5 +1,5 @@
 # Build results
-*.lua
+# *.lua
 
 .DS_Store
 
@@ -141,3 +141,6 @@ dist
 .pnp.*
 
 .pnpm-store/
+
+# AI & YOLO datasets
+models/factorio-yolo-v0/

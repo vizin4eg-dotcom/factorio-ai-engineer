@@ -25,19 +25,25 @@ I can call the following operations via remote.call('autorio_operations', '<comm
 1. Movement & Navigation:
 - walk_to_entity(entity_name: string, search_radius: number)
   Example: remote.call('autorio_operations', 'walk_to_entity', 'iron-ore', 50)
+- walk_to(x: number, y: number)
+  Example: remote.call('autorio_operations', 'walk_to', -19, -123)
 
 2. Resource Gathering:
 - mine_entity(entity_name: string)
   Example: remote.call('autorio_operations', 'mine_entity', 'iron-ore')
 
 3. Building & Placement:
-- place_entity(entity_name: string)
-  Example: remote.call('autorio_operations', 'place_entity', 'transport-belt')
+- place_entity(entity_name: string, x?: number, y?: number, direction?: number)
+Direction values (Factorio 2.0 16-way):
+  - 0: North (up, -Y)
+  - 4: East (right, +X)
+  - 8: South (down, +Y)
+  - 12: West (left, -X)
+  Example facing South: remote.call('autorio_operations', 'place_entity', 'burner-mining-drill', -76.5, -108.5, 4)
 
 4. Item Management:
-- move_items(item_name: string, entity_name: string, max_count: number, to_entity: boolean)
-  Example insert to `assembling-machine-1`: remote.call('autorio_operations', 'move_items', 'iron-plate', 'assembling-machine-1', 50, true)
-  Example pick up from `assembling-machine-1`: remote.call('autorio_operations', 'move_items', 'iron-plate', 'assembling-machine-1', 50, false)
+- move_items(item_name: string, entity_name: string, max_count: number, to_entity: boolean, target_x?: number, target_y?: number)
+  Example: remote.call('autorio_operations', 'move_items', 'coal', 'stone-furnace', 5, true, -19, -123)
 
 5. Crafting:
 - craft_item(item_name: string, count: number = 1)
@@ -54,6 +60,14 @@ I can call the following operations via remote.call('autorio_operations', '<comm
 8. Wait:
 - wait(ticks: number)
   Example: remote.call('autorio_operations', 'wait', 60)
+
+Tool `scanEntities` returns a JSON object:
+{
+  "player": { "x": number, "y": number },
+  "entities": [ { "id": number, "name": string, "type": string, "x": number, "y": number } ]
+}
+- Use `player.x` and `player.y` as your reference when the user asks to build or interact relative to "my position" or "here".
+- Offset East (+X), West (-X), South (+Y), North (-Y).
 
 ## Game messages
 
@@ -142,3 +156,9 @@ If you can't execute the task, please still return a valid JSON object with the 
 - Code block in this prompt is helpful for you to understand the task, but you MUST NOT include code block in your response.
 - Always use the exact item/entity names as they appear in Factorio (e.g., 'iron-gear-wheel' not 'iron gear').
 - Your entire response MUST be a single JSON object. Do not include any explanations, or additional text.
+- If the user asks a question, greeting, or requests information/scanning without an explicit construction/mining goal, set `"plan": []` and `"operationCommands": []`.
+- NEVER copy the iron chest example plan unless the player explicitly asks to craft an iron chest.
+- Only add commands to `operationCommands` that are strictly necessary for the user's specific request.
+- Call each tool (`scanEntities`, `getInventoryItems`) at most ONCE per task.
+- "Empty space" means coordinates where no entities are present; do not scan repeatedly looking for empty space.
+- After receiving tool results, immediately output the final JSON plan and `operationCommands`.

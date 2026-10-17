@@ -1,0 +1,35 @@
+version: "0.2"
+ignorePaths: []
+dictionaryDefinitions: []
+dictionaries: []
+words:
+  - apierrors
+  - apiserver
+  - Ayaka
+  - cenkalti
+  - Factorio
+  - factorioapi
+  - fatcontext
+  - gorcon
+  - grpcotel
+  - grpcpkg
+  - grpcservers
+  - grpcservices
+  - healthz
+  - httppkg
+  - labstack
+  - maxbrunsfeld
+  - Neko
+  - nekomeowww
+  - nolint
+  - nonamedreturns
+  - opentelemetry
+  - Otel
+  - otelgrpc
+  - otelhttp
+  - protovalidate
+  - RCON
+  - samber
+  - Unmute
+ignoreWords: []
+import: []

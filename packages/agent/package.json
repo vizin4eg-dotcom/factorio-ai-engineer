@@ -28,6 +28,7 @@
     "factorio-rcon-api-client": "^2.0.4",
     "it-ws": "^6.1.5",
     "neuri": "^0.2.1",
+    "rcon-client": "^4.2.5",
     "zod": "^4.1.12",
     "zod-to-json-schema": "^3.24.6"
   },

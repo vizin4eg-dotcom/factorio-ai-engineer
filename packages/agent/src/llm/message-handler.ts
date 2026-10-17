@@ -5,7 +5,12 @@ import { createLogg } from '@guiiai/logg'
 import { assistant, composeAgent, defineToolFunction, system, toolFunction, user } from 'neuri/openai'
 import { openaiConfig } from '../config'
 import { parseLLMMessage } from '../parser'
-import prompt from './prompt.md?raw'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const prompt = readFileSync(join(__dirname, 'prompt.md'), 'utf-8')
 import { tools } from './tools'
 
 const logger = createLogg('agent').useGlobalConfig()
@@ -41,8 +46,8 @@ export async function createMessageHandler() {
     }
 
     const response = await agent.call(messages, {
-      model: 'gpt-4o',
-      maxRoundTrip: 10,
+      model: 'gemini-3.5-flash-lite', // Или любое имя, Kobold.cpp его проигнорирует, но так честнее для локальной модели
+      maxRoundTrip: 2,
     })
 
     if (!response) {
@@ -61,7 +66,14 @@ export async function createMessageHandler() {
       return null
     }
 
-    const parsedMessage = parseLLMMessage(messageFromLLM)
+    // Очищаем ответ от маркдаун-оберток ```json ... ``` которые любят выдавать локальные модели
+    const cleanedContent = messageFromLLM
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim()
+
+    const parsedMessage = parseLLMMessage(cleanedContent)
     messages.push(assistant(`${JSON.stringify(parsedMessage)}`))
 
     return parsedMessage

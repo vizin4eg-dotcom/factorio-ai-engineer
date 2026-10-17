@@ -17,9 +17,11 @@ export const tools: ToolFunction[] = [
     description: 'Get the items in the player\'s inventory',
     schema: z.object({}),
     fn: async () => {
-      const response = await v2FactorioConsoleCommandRawPost({ body: { input: '/c remote.call("autorio_tools", "get_inventory_items", 1)' } })
-      logger.withFields({ response: response.data.output }).debug('Inventory items')
-      return response.data.output
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_tools", "get_inventory_items", 1)' },
+      })
+      logger.withFields({ response: response.data?.output }).debug('Inventory items')
+      return response.data?.output || ''
     },
   },
   {
@@ -31,9 +33,28 @@ export const tools: ToolFunction[] = [
     fn: async ({ parameters }) => {
       logger.withFields(parameters).debug('Try to get recipe for item')
 
-      const response = await v2FactorioConsoleCommandRawPost({ body: { input: `/c remote.call("autorio_tools", "get_recipe", "${parameters.item}", 1)` } })
-      logger.withFields({ response: response.data.output }).debug('Recipe')
-      return response.data.output
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "get_recipe", "${parameters.item}", 1)` },
+      })
+      logger.withFields({ response: response.data?.output }).debug('Recipe')
+      return response.data?.output || ''
+    },
+  },
+  {
+    name: 'scanEntities',
+    description: 'Scan surrounding area to get player current coordinates (player.x, player.y) and nearby entities',
+    schema: z.object({
+      radius: z.number().default(25).describe('Scanning radius in tiles around the player'),
+    }),
+    fn: async ({ parameters }) => {
+      const radius = parameters?.radius || 25
+      logger.withFields({ radius }).debug('Scanning entities around player')
+
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "scan_entities", ${radius}, 1)` },
+      })
+      logger.withFields({ output: response.data?.output }).debug('Entities scanned')
+      return response.data?.output || '{"player":{"x":0,"y":0},"entities":[]}'
     },
   },
 ]
