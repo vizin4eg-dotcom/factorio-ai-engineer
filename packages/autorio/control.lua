@@ -87,7 +87,7 @@ end
 local ____exports = {}
 function ____exports.get_inventory_items(self, player_id)
     log("[AUTORIO] Getting inventory items for player: " .. tostring(player_id))
-    local player = game.connected_players[player_id]
+    local player = get_target_player(player_id)
     if not player then return {} end
     local main_inventory = player.get_main_inventory()
     if not main_inventory then
@@ -269,20 +269,40 @@ end
 local ____exports = {}
 local ____inventory = require("utils.inventory")
 local get_inventory_items = ____inventory.get_inventory_items
+
+local function get_target_player(player_id)
+    if player_id then
+        local p = game.get_player(player_id)
+        if p and p.connected then return p end
+    end
+    if #game.connected_players > 0 then
+        return game.connected_players[1]
+    end
+    return nil
+end
+
 function ____exports.create_tools_remote_interface(self)
     remote.add_interface(
         "autorio_tools",
         {
             get_inventory_items = function(player_id)
-                rcon.print(serpent.block(get_inventory_items(nil, player_id)))
+                local player = get_target_player(player_id)
+                if not player then
+                    rcon.print("{}")
+                    return false
+                end
+                rcon.print(serpent.block(get_inventory_items(nil, player.index)))
                 return true
             end,
             get_recipe = function(item_name, player_id)
-                local player = game.connected_players[player_id]
-                if not player then return false end
+                local player = get_target_player(player_id)
+                if not player then
+                    rcon.print("{}")
+                    return false
+                end
                 local recipe = player.force.recipes[item_name]
                 if not recipe then
-                    rcon.print("no such recipe")
+                    rcon.print("{}")
                     return false
                 end
                 if not recipe.enabled then
@@ -299,8 +319,7 @@ function ____exports.create_tools_remote_interface(self)
                 return true
             end,
             scan_entities = function(radius, player_id)
-                player_id = player_id or 1
-                local player = game.connected_players[player_id]
+                local player = get_target_player(player_id)
                 if not player or not player.character then
                     rcon.print('{"player":{"x":0,"y":0},"entities":[]}')
                     return false
