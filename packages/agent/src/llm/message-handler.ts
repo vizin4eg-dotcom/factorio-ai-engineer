@@ -2,6 +2,7 @@ import type { DefinedTool, Message } from 'neuri/openai'
 
 import type { StdoutMessage } from '../parser'
 import { createLogg } from '@guiiai/logg'
+import { v2FactorioConsoleCommandRawPost } from 'factorio-rcon-api-client'
 import { assistant, composeAgent, defineToolFunction, system, toolFunction, user } from 'neuri/openai'
 import { openaiConfig } from '../config'
 import { parseLLMMessage } from '../parser'
@@ -36,7 +37,24 @@ export async function createMessageHandler() {
     logger.withFields({ message }).debug('Handling message')
 
     if (message.type === 'chat') {
-      messages.push(user(`[CHAT] ${message.message}`))
+      let currentObservation = ''
+      try {
+        const [scanRes, invRes] = await Promise.all([
+          v2FactorioConsoleCommandRawPost({
+            body: { input: '/sc remote.call("autorio_tools", "scan_entities", 25, 1)' },
+          }),
+          v2FactorioConsoleCommandRawPost({
+            body: { input: '/sc remote.call("autorio_tools", "get_inventory_items", 1)' },
+          }),
+        ])
+
+        currentObservation = `\n\n[Current Observation]:\nEntities & Player:\n${scanRes.data?.output || '{}'}\n\nInventory:\n${invRes.data?.output || '[]'}`
+      }
+      catch (err) {
+        logger.withFields({ err }).warn('Failed to fetch automatic observation')
+      }
+
+      messages.push(user(`[CHAT] ${message.message}${currentObservation}`))
     }
     else if (message.type === 'modError') {
       messages.push(user(`[MOD] Error: ${message.error}`))
@@ -46,8 +64,8 @@ export async function createMessageHandler() {
     }
 
     const response = await agent.call(messages, {
-      model: openaiConfig.model || 'gemini-2.5-flash',
-      maxRoundTrip: 2,
+      model: openaiConfig.model || 'gemini-3.5-flash-lite',
+      maxRoundTrip: 5,
     })
 
     if (!response) {

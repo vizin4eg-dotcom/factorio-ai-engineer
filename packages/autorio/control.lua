@@ -191,15 +191,24 @@ function ____exports.new_task_manager(self)
                 player_state.parameters_move_items = task
                 break
             end
-            ____cond9 = ____cond9 or ____switch9 == TaskStates.CRAFTING
+           ____cond9 = ____cond9 or ____switch9 == TaskStates.CRAFTING
             if ____cond9 then
                 do
-                    local player = game.connected_players[1]
+                    local player = get_target_player(1)
                     if not player then
                         log("[AUTORIO] No player found")
                         return
                     end
-                    player.begin_crafting({count = task.count, recipe = task.item_name})
+                    -- Factorio сам запустит крафт шестеренок, если есть железо
+                    local queued_count = player.begin_crafting({count = task.count, recipe = task.item_name})
+                    if queued_count == 0 then
+                        log("[AUTORIO] Cannot craft " .. tostring(task.item_name) .. ": not enough raw materials")
+                        game.print("[AI Agent]: Not enough raw materials to craft " .. tostring(task.item_name))
+                        player_state.task_state = TaskStates.IDLE
+                        next_task(nil)
+                        break
+                    end
+                    task.count = queued_count
                     player_state.parameters_craft_item = task
                     break
                 end
@@ -525,16 +534,16 @@ remote.add_interface(
         end,
         craft_item = function(item_name, count)
             if count == nil then count = 1 end
-            local player = game.connected_players[1]
-            if not player or not player.force.recipes[item_name] then
+            local player = get_target_player(1)
+            if not player then return {false, "No player"} end
+            local recipe = player.force.recipes[item_name]
+            if not recipe then
                 return {false, "Recipe not available"}
             end
-            if not player.force.recipes[item_name].enabled then
+            if not recipe.enabled then
                 return {false, "Recipe not unlocked"}
             end
-            if not check_can_craft(nil, player, item_name, count) then
-                return {false, "Not enough ingredients"}
-            end
+            -- Сразу ставим задачу в очередь, не проверяя промежуточные детали
             task_manager:add_task({type = TaskStates.CRAFTING, item_name = item_name, count = count, crafted = 0})
             return {true, "Task started"}
         end,
@@ -780,11 +789,12 @@ local function state_placing(self, player)
         return {false, "Cannot access player inventory"}
     end
     local item_stack, _ = inventory.find_item_stack(params.entity_name)
-    if not item_stack then
+    if not item_stack or item_stack.count == 0 then
         log("[AUTORIO] Entity not found in inventory: " .. params.entity_name)
+        game.print("[AI Agent]: Cannot place '" .. params.entity_name .. "' (not in inventory).")
         task_manager:reset_task_state()
         task_manager:next_task()
-        return {false, "Entity not found in inventory"}
+        return
     end
     if not params.position then
         params.position = surface.find_non_colliding_position(params.entity_name, player.position, 1, 1)
