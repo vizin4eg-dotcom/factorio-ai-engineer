@@ -4,9 +4,10 @@ import { useLogg } from '@guiiai/logg'
 
 const logger = useLogg('config').useGlobalConfig()
 
-export const openaiConfig: OpenAIConfig = {
+export const openaiConfig: OpenAIConfig & { model?: string } = {
   apiKey: '',
   baseUrl: '',
+  model: 'gemini-2.5-flash',
 }
 
 export const rconClientConfig: FactorioRconAPIClientConfig = {
@@ -24,6 +25,7 @@ export function initEnv() {
 
   openaiConfig.apiKey = env.OPENAI_API_KEY || ''
   openaiConfig.baseUrl = env.OPENAI_API_BASEURL || ''
+  openaiConfig.model = env.OPENAI_MODEL_NAME || env.MODEL_NAME || 'gemini-2.5-flash'
 
   rconClientConfig.host = env.RCON_API_SERVER_HOST || 'localhost'
   rconClientConfig.port = Number.parseInt(env.RCON_API_SERVER_PORT || '24180')

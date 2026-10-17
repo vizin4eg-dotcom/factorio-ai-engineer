@@ -40,13 +40,15 @@ async function main() {
   const args = [
     '--start-server',
     factorioConfig.savePath,
-    '--server-settings',
-    'C:\\Games\\FactorioHeadless\\server-settings.json',
     '--rcon-password',
     factorioConfig.rconPassword,
     '--rcon-port',
-    factorioConfig.rconPort.toString(),    
+    factorioConfig.rconPort.toString(),
   ]
+
+  if (factorioConfig.serverSettingsPath) {
+    args.push('--server-settings', factorioConfig.serverSettingsPath)
+  }
 
   if (arch() === 'arm64') {
     args.unshift(factorioConfig.path)

@@ -46,7 +46,7 @@ export async function createMessageHandler() {
     }
 
     const response = await agent.call(messages, {
-      model: 'gemini-3.5-flash-lite', // Или любое имя, Kobold.cpp его проигнорирует, но так честнее для локальной модели
+      model: openaiConfig.model || 'gemini-2.5-flash',
       maxRoundTrip: 2,
     })
 
