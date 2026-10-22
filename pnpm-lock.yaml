@@ -35,6 +35,9 @@ importers:
       taze:
         specifier: ^19.9.2
         version: 19.9.2
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
       typed-factorio:
         specifier: ^3.35.0
         version: 3.35.0(lua-types@2.13.1)(typescript-to-lua@1.32.0(typescript@5.9.3))
@@ -163,9 +166,6 @@ importers:
       '@antfu/eslint-config':
         specifier: ^6.1.0
         version: 6.1.0(@unocss/eslint-plugin@66.5.4(eslint@9.38.0(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.22)(eslint-plugin-format@1.0.2(eslint@9.38.0(jiti@2.6.1)))(eslint@9.38.0(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.4(@types/debug@4.1.12)(@types/node@24.0.14)(jiti@2.6.1)(tsx@4.20.6)(yaml@2.8.2))
-      '@proj-airi/tstl-plugin-reload-factorio-mod':
-        specifier: workspace:*
-        version: link:../tstl-plugin-reload-factorio-mod
       eslint:
         specifier: ^9.38.0
         version: 9.38.0(jiti@2.6.1)

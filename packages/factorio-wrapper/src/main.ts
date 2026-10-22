@@ -37,9 +37,24 @@ async function main() {
     stdout: ('pipe' | 'inherit')[]
   }>
 
+  // Проверяем аргумент командной строки (argv[2])
+  const saveArg = process.argv[2]
+  let savePathToUse = factorioConfig.savePath
+
+  if (saveArg) {
+    // Если передан полный путь — берем как есть, если только имя файла — подставляем папку из конфига
+    if (saveArg.includes('/') || saveArg.includes('\\')) {
+      savePathToUse = saveArg
+    } else {
+      // Подставляем имя файла к базовой папке сейвов
+      const savesDir = factorioConfig.savePath.substring(0, Math.max(factorioConfig.savePath.lastIndexOf('/'), factorioConfig.savePath.lastIndexOf('\\')))
+      savePathToUse = savesDir ? `${savesDir}/${saveArg}` : saveArg
+    }
+  }
+
   const args = [
     '--start-server',
-    factorioConfig.savePath,
+    savePathToUse,
     '--rcon-password',
     factorioConfig.rconPassword,
     '--rcon-port',

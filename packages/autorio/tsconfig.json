@@ -18,8 +18,6 @@
     "luaLibImport": "inline",
     "luaBundle": "control.lua",
     "luaBundleEntry": "src/control.ts",
-    "luaPlugins": [
-      { "name": "@proj-airi/tstl-plugin-reload-factorio-mod/dist/index.mjs" }
     ]
   },
   "include": [

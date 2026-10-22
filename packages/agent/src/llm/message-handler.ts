@@ -39,16 +39,19 @@ export async function createMessageHandler() {
     if (message.type === 'chat') {
       let currentObservation = ''
       try {
-        const [scanRes, invRes] = await Promise.all([
+        const [scanRes, invRes, telemRes] = await Promise.all([
           v2FactorioConsoleCommandRawPost({
             body: { input: '/sc remote.call("autorio_tools", "scan_entities", 25, 1)' },
           }),
           v2FactorioConsoleCommandRawPost({
             body: { input: '/sc remote.call("autorio_tools", "get_inventory_items", 1)' },
           }),
+          v2FactorioConsoleCommandRawPost({
+            body: { input: '/sc remote.call("autorio_tools", "get_base_telemetry", 1)' },
+          }),
         ])
 
-        currentObservation = `\n\n[Current Observation]:\nEntities & Player:\n${scanRes.data?.output || '{}'}\n\nInventory:\n${invRes.data?.output || '[]'}`
+        currentObservation = `\n\n[Current Observation]:\nEntities & Player:\n${scanRes.data?.output || '{}'}\n\nInventory:\n${invRes.data?.output || '[]'}\n\nTelemetry:\n${telemRes.data?.output || '{}'}`
       }
       catch (err) {
         logger.withFields({ err }).warn('Failed to fetch automatic observation')
@@ -63,9 +66,14 @@ export async function createMessageHandler() {
       messages.push(user(`[MOD] All operations completed`))
     }
 
-    const response = await agent.call(messages, {
+	// Защита: отсекаем хвост модели при повторных попытках
+    while (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+      messages.pop()
+    }
+
+    const response = await agent.call([...messages], {
       model: openaiConfig.model || 'gemini-3.5-flash-lite',
-      maxRoundTrip: 5,
+      maxRoundTrip: 3,
     })
 
     if (!response) {

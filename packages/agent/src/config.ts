@@ -25,7 +25,7 @@ export function initEnv() {
 
   openaiConfig.apiKey = env.OPENAI_API_KEY || ''
   openaiConfig.baseUrl = env.OPENAI_API_BASEURL || ''
-  openaiConfig.model = env.OPENAI_MODEL_NAME || env.MODEL_NAME || 'gemini-2.5-flash'
+  openaiConfig.model = env.OPENAI_MODEL_NAME || env.MODEL_NAME || 'gemini-3.5-flash-lite'
 
   rconClientConfig.host = env.RCON_API_SERVER_HOST || 'localhost'
   rconClientConfig.port = Number.parseInt(env.RCON_API_SERVER_PORT || '24180')

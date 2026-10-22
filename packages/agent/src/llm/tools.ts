@@ -25,6 +25,23 @@ export const tools: ToolFunction[] = [
     },
   },
   {
+    name: 'tagSelectedEntity',
+    description: 'Tag and monitor the entity currently selected/hovered by the player cursor. Use for remembering key infrastructure like reactors, input/output belts, and fluid tanks.',
+    schema: z.object({
+      label: z.string().describe('Human-readable unique name for this node (e.g. "Реактор 1", "Вход Плавильни 1", "Нефть Север")'),
+      category: z.enum(['critical', 'production', 'temporary']).optional().describe('Monitoring priority category. Defaults to critical.'),
+    }),
+    fn: async ({ label, category }) => {
+      logger.withFields({ label, category }).debug('Tagging selected entity')
+      const catArg = category || 'critical'
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "tag_selected_entity", "${label}", "${catArg}", 1)` },
+      })
+      logger.withFields({ response: response.data?.output }).debug('Entity tagged result')
+      return response.data?.output || '{"status":"unknown"}'
+    },
+  },
+  {
     name: 'getRecipe',
     description: 'Get the recipe for a given item',
     schema: z.object({
@@ -38,6 +55,19 @@ export const tools: ToolFunction[] = [
       })
       logger.withFields({ response: response.data?.output }).debug('Recipe')
       return response.data?.output || ''
+    },
+  },
+  {
+    name: 'getBaseTelemetry',
+    description: 'Get base telemetry including power grid status, boiler fuel alerts, key production rates, and logistic network robot statistics.',
+    schema: z.object({}),
+    fn: async () => {
+      logger.debug('Fetching base telemetry')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_tools", "get_base_telemetry", 1)' },
+      })
+      logger.withFields({ output: response.data?.output }).debug('Base telemetry received')
+      return response.data?.output || '{}'
     },
   },
   {

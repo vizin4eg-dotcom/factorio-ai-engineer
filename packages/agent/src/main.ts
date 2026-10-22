@@ -29,10 +29,13 @@ async function executeCommandFromAgent<T extends StdoutMessage>(message: T, mess
 
 // Отправляем сообщение агента в игровой чат без эха команды
   if (llmResponse.chatMessage) {
-    const safeText = llmResponse.chatMessage.replace(/["\\]/g, '\\$&')
-    await v2FactorioConsoleCommandRawPost({
-      body: { input: `/sc game.print("[AI Agent]: ${safeText}")` },
-    })
+    const lines = llmResponse.chatMessage.split('\n').filter(l => l.trim().length > 0)
+    for (const line of lines) {
+      const safeText = line.replace(/["\\]/g, '\\$&')
+      await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc game.print("[AI Agent]: ${safeText}")` },
+      })
+    }
   }
 
   if (llmResponse.operationCommands.length === 0) {

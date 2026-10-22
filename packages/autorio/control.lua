@@ -1,4 +1,4 @@
---[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua (Enhanced for Coordinates, Ghost Building & Scanning) ]]
+--[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua (Enhanced for Companion Bot Architecture) ]]
 
 local ____modules = {}
 local ____moduleCache = {}
@@ -13,6 +13,40 @@ local function get_target_player(player_id)
         return game.connected_players[1]
     end
     return nil
+end
+
+local function get_companion_body()
+    -- 1. Быстрый возврат валидной ссылки
+    if storage.bot and storage.bot.valid then
+        return storage.bot
+    end
+
+    local player = get_target_player(1)
+    local default_force = (player and player.force) or "player"
+
+    -- 2. Ищем существующего компаньона по ВСЕМ поверхностям (Наувис, Вулкан, платформы и т.д.)
+    for _, surface in pairs(game.surfaces) do
+        local chars = surface.find_entities_filtered{name = "character", force = default_force}
+        for _, c in ipairs(chars) do
+            -- Проверяем, что это не живой игрок
+            if c.valid and (not player or c ~= player.character) then
+                storage.bot = c
+                return storage.bot
+            end
+        end
+    end
+
+    -- 3. Если бота нет ни на одной планете — создаём нового рядом с игроком
+    if not player or not player.surface then return nil end
+
+    storage.bot = player.surface.create_entity{
+        name = "character",
+        position = {player.position.x + 2.5, player.position.y},
+        force = player.force
+    }
+    storage.bot.color = {r = 0.15, g = 0.45, b = 0.95, a = 1}
+    log("[AUTORIO] Companion body created on surface: " .. player.surface.name)
+    return storage.bot
 end
 
 local function build_safe_entity_filter(target_name, center_pos, radius, force)
@@ -54,7 +88,7 @@ local function build_safe_entity_filter(target_name, center_pos, radius, force)
         return filter
     end
 
-    -- 3. Safe type verification using pcall to prevent crashes on invalid types
+    -- 3. Safe type verification using pcall
     local test_filter = {position = center_pos, radius = radius, type = target_name}
     local success, _ = pcall(function()
         game.surfaces[1].find_entities_filtered(test_filter)
@@ -96,10 +130,10 @@ local function __TS__ArrayMap(self, callbackfn, thisArg)
 end
 local ____exports = {}
 function ____exports.get_inventory_items(self, player_id)
-    log("[AUTORIO] Getting inventory items for player: " .. tostring(player_id))
-    local player = get_target_player(player_id)
-    if not player then return {} end
-    local main_inventory = player.get_main_inventory()
+    log("[AUTORIO] Getting inventory items for companion bot")
+    local bot = get_companion_body()
+    if not bot or not bot.valid then return {} end
+    local main_inventory = bot.get_main_inventory()
     if not main_inventory then
         return {}
     end
@@ -129,6 +163,7 @@ ____exports.TaskStates.MOVING_ITEMS = "moving_items"
 ____exports.TaskStates.ATTACKING = "attacking"
 ____exports.TaskStates.WAITING = "waiting"
 ____exports.TaskStates.BUILDING_GHOSTS = "building_ghosts"
+____exports.TaskStates.EQUIPPING_ARMOR = "equipping_armor"
 return ____exports
  end,
 
@@ -156,7 +191,6 @@ function ____exports.new_task_manager(self)
         local task = table.remove(task_queue, 1)
         if not task then
             player_state.task_state = TaskStates.IDLE
-            game.print("[AUTORIO] All operations completed")
             log("[AUTORIO] All operations completed")
             return
         end
@@ -182,23 +216,41 @@ function ____exports.new_task_manager(self)
             elseif switch_state == TaskStates.BUILDING_GHOSTS then
                 player_state.parameters_build_ghosts = task
                 break
+			elseif switch_state == TaskStates.EQUIPPING_ARMOR then
+				player_state.parameters_equip_armor = task
+				break
             elseif switch_state == TaskStates.CRAFTING then
                 do
-                    local player = get_target_player(1)
-                    if not player then
-                        log("[AUTORIO] No player found for crafting")
-                        return
-                    end
-                    local queued_count = player.begin_crafting({count = task.count, recipe = task.item_name})
-                    if queued_count == 0 then
-                        log("[AUTORIO] Cannot craft " .. tostring(task.item_name) .. ": not enough raw materials")
-                        game.print("[AI Agent]: Not enough raw materials to craft " .. tostring(task.item_name))
+                    local bot = get_companion_body()
+                    if not bot or not bot.valid then
+                        log("[AUTORIO] No companion bot found for crafting")
                         player_state.task_state = TaskStates.IDLE
                         next_task(nil)
                         break
                     end
-                    task.count = queued_count
-                    player_state.parameters_craft_item = task
+
+                    local recipe_to_craft = task.recipe_name or task.item_name
+                    local count_to_craft = tonumber(task.count) or 1
+
+                    local queued_count = bot.begin_crafting({
+                        count = count_to_craft,
+                        recipe = recipe_to_craft
+                    })
+
+                    if queued_count == 0 then
+                        log("[AUTORIO] Cannot craft " .. tostring(recipe_to_craft) .. ": missing materials")
+                        game.print("[AI Companion]: Not enough materials to craft " .. tostring(recipe_to_craft))
+                        player_state.task_state = TaskStates.IDLE
+                        next_task(nil)
+                        break
+                    end
+
+                    -- Фиксируем задачу и даем 15 тиков буфера на появление в очереди движка
+                    player_state.parameters_craft_item = {
+                        recipe = recipe_to_craft,
+                        count = queued_count,
+                        warmup_ticks = 15
+                    }
                     break
                 end
             elseif switch_state == TaskStates.ATTACKING then
@@ -226,9 +278,11 @@ function ____exports.new_task_manager(self)
     end
 
     local function reset_task_state(self)
-        local player = get_target_player(1)
-        if player then
-            player.walking_state = {walking = false}
+        local bot = get_companion_body()
+        if bot and bot.valid then
+            if #task_queue == 0 then
+                bot.walking_state = {walking = false}
+            end
         end
         player_state.task_state = TaskStates.IDLE
         player_state.parameters_walk_to_entity = nil
@@ -240,6 +294,7 @@ function ____exports.new_task_manager(self)
         player_state.parameters_attack_nearest_enemy = nil
         player_state.parameters_research_technology = nil
         player_state.parameters_waiting = nil
+		player_state.parameters_equip_armor = nil
         player_state.parameters_build_ghosts = nil
     end
 
@@ -286,23 +341,70 @@ function ____exports.create_tools_remote_interface(self)
         "autorio_tools",
         {
             get_inventory_items = function(player_id)
-                local player = get_target_player(player_id)
-                if not player then
-                    rcon.print("{}")
-                    return false
-                end
-                rcon.print(serpent.block(get_inventory_items(nil, player.index)))
+                rcon.print(serpent.block(get_inventory_items(nil, player_id)))
                 return true
             end,
-			get_base_telemetry = function(player_id)
+            tag_selected_entity = function(label, category, player_id)
                 local player = get_target_player(player_id)
                 if not player or not player.character then
                     rcon.print('{"status":"error","message":"no_player"}')
                     return false
                 end
 
-                local surface = player.surface
-                local force = player.force
+                local ent = player.selected
+                if not ent or not ent.valid then
+                    rcon.print('{"status":"error","message":"nothing_selected"}')
+                    return false
+                end
+
+                storage.monitored_nodes = storage.monitored_nodes or {}
+
+                local linked_chest_unit = nil
+                if ent.type == "reactor" then
+                    local chests = ent.surface.find_entities_filtered{
+                        position = ent.position,
+                        radius = 6,
+                        type = "logistic-container",
+                        force = ent.force
+                    }
+                    if #chests > 0 and chests[1].valid then
+                        linked_chest_unit = chests[1].unit_number
+                    end
+                end
+
+                storage.monitored_nodes[label] = {
+                    unit_number = ent.unit_number,
+                    name = ent.name,
+                    type = ent.type,
+                    category = category or "critical",
+                    linked_chest_unit = linked_chest_unit,
+                    x = math.floor(ent.position.x),
+                    y = math.floor(ent.position.y),
+                    surface_name = ent.surface.name
+                }
+
+                local rep = {
+                    status = "ok",
+                    label = label,
+                    entity = ent.name,
+                    type = ent.type,
+                    category = category or "critical",
+                    has_linked_chest = (linked_chest_unit ~= nil)
+                }
+                rcon.print(helpers.table_to_json(rep))
+                return true
+            end,
+            get_base_telemetry = function(player_id)
+                local bot = get_companion_body()
+                local player = get_target_player(player_id)
+                local ref_entity = (bot and bot.valid) and bot or (player and player.character)
+                if not ref_entity then
+                    rcon.print('{"status":"error","message":"no_entity"}')
+                    return false
+                end
+
+                local surface = ref_entity.surface
+                local force = ref_entity.force
                 local result = {
                     power = { status = "nominal", satisfaction = 1.0, output_kw = 0 },
                     fuel_alerts = {},
@@ -310,16 +412,21 @@ function ____exports.create_tools_remote_interface(self)
                     logistic_network = nil
                 }
 
-                -- 1. Энергетика: ищем ближайший столб ЛЭП в радиусе 40 тайлов
                 local poles = surface.find_entities_filtered({
-                    position = player.position,
+                    position = ref_entity.position,
                     radius = 40,
                     type = "electric-pole"
                 })
                 if #poles > 0 and poles[1].valid and poles[1].electric_network_statistics then
                     local net = poles[1].electric_network_statistics
-                    local produced = net.get_flow_count({name = "electric-energy-produced", input = false, precision_index = defines.flow_precision_index.five_seconds})
-                    local consumed = net.get_flow_count({name = "electric-energy-consumed", input = true, precision_index = defines.flow_precision_index.five_seconds})
+                    local produced = 0
+                    local consumed = 0
+                    if net.output_counts then
+                        for _, val in pairs(net.output_counts) do produced = produced + val end
+                    end
+                    if net.input_counts then
+                        for _, val in pairs(net.input_counts) do consumed = consumed + val end
+                    end
                     
                     local satisfaction = consumed > 0 and math.min(1.0, produced / consumed) or 1.0
                     result.power.satisfaction = math.floor(satisfaction * 100) / 100
@@ -327,7 +434,6 @@ function ____exports.create_tools_remote_interface(self)
                     result.power.status = satisfaction < 0.95 and "brownout_warning" or "nominal"
                 end
 
-                -- 2. Критическое топливо: проверка бойлеров на карте
                 local boilers = surface.find_entities_filtered({
                     force = force,
                     name = "boiler"
@@ -347,42 +453,114 @@ function ____exports.create_tools_remote_interface(self)
                     end
                 end
 
-                -- 3. Баланс ключевых ресурсов (плиты за последнюю 1 минуту)
-                local item_stats = force.get_item_production_statistics(surface)
-                local tracked_items = {"iron-plate", "copper-plate", "stone-brick"}
-                for _, item_name in ipairs(tracked_items) do
-                    local prod = item_stats.get_flow_count({name = item_name, input = false, precision_index = defines.flow_precision_index.one_minute})
-                    local cons = item_stats.get_flow_count({name = item_name, input = true, precision_index = defines.flow_precision_index.one_minute})
-                    if prod > 0 or cons > 0 then
-                        result.production_rates[item_name] = {
-                            produced_per_min = prod,
-                            consumed_per_min = cons,
-                            deficit = math.max(0, cons - prod)
-                        }
+                local success_stats, item_stats = pcall(function()
+                    return force.get_item_production_statistics(surface)
+                end)
+                if success_stats and item_stats then
+                    local tracked_items = {"iron-plate", "copper-plate", "stone-brick"}
+                    for _, item_name in ipairs(tracked_items) do
+                        local prod = 0
+                        local cons = 0
+                        pcall(function()
+                            prod = item_stats.get_output_count(item_name)
+                            cons = item_stats.get_input_count(item_name)
+                        end)
+                        if prod > 0 or cons > 0 then
+                            result.production_rates[item_name] = {
+                                produced = math.floor(prod),
+                                consumed = math.floor(cons),
+                                deficit = math.max(0, math.floor(cons - prod))
+                            }
+                        end
                     end
                 end
 
-                -- 4. Логистическая сеть (активируется автоматически, когда есть робопорты)
-                local log_net = surface.find_logistic_network_by_position(player.position, force)
+                local log_net = surface.find_logistic_network_by_position(ref_entity.position, force.name)
+                if not log_net and ref_entity.logistic_network then
+                    log_net = ref_entity.logistic_network
+                end
+
                 if log_net and log_net.valid then
                     result.logistic_network = {
                         all_bots = log_net.all_logistic_robots,
                         available_bots = log_net.available_logistic_robots,
                         all_construction_bots = log_net.all_construction_robots,
-                        available_construction_bots = log_net.available_construction_bots
+                        available_construction_bots = log_net.available_construction_robots
                     }
+                end
+                
+                result.named_nodes = {}
+                storage.monitored_nodes = storage.monitored_nodes or {}
+
+                for label, node in pairs(storage.monitored_nodes) do
+                    local node_data = {
+                        label = label,
+                        type = node.type,
+                        category = node.category,
+                        valid = false
+                    }
+
+                    local ent = nil
+                    if node.x and node.y and node.type then
+                        local found = surface.find_entities_filtered{
+                            position = {node.x, node.y},
+                            radius = 2.0,
+                            type = node.type
+                        }
+                        if #found > 0 and found[1].valid then
+                            ent = found[1]
+                        end
+                    end
+
+                    if ent and ent.valid then
+                        node_data.valid = true
+
+                        if node.type == "reactor" then
+                            local finv = ent.get_fuel_inventory()
+                            local queued_fuel = finv and finv.get_item_count("uranium-fuel-cell") or 0
+                            local is_burning = (ent.burner and ent.burner.remaining_burning_fuel > 0) and 1 or 0
+                            node_data.fuel_in_reactor = queued_fuel + is_burning
+                            node_data.temperature = math.floor(ent.temperature or 0)
+                            node_data.fuel_in_chest = 0
+
+                            local chests = surface.find_entities_filtered{
+                                position = ent.position,
+                                radius = 6.0,
+                                type = "logistic-container",
+                                force = force
+                            }
+                            if #chests > 0 and chests[1].valid then
+                                local cinv = chests[1].get_inventory(defines.inventory.chest)
+                                if cinv then
+                                    node_data.fuel_in_chest = cinv.get_item_count("uranium-fuel-cell")
+                                end
+                            end
+                        elseif node.type == "storage-tank" or node.type == "pipe" then
+                            node_data.fluids = ent.get_fluid_contents()
+                        elseif node.type == "transport-belt" then
+                            local line = ent.get_transport_line(1)
+                            node_data.item_count_on_tile = line and line.get_item_count() or 0
+                        elseif node.type == "container" or node.type == "logistic-container" then
+                            local cinv = ent.get_inventory(defines.inventory.chest)
+                            node_data.items = cinv and cinv.get_contents() or {}
+                        end
+                    end
+
+                    result.named_nodes[label] = node_data
                 end
 
                 rcon.print(helpers.table_to_json(result))
                 return true
             end,
             get_recipe = function(item_name, player_id)
+                local bot = get_companion_body()
                 local player = get_target_player(player_id)
-                if not player then
+                local force = bot and bot.force or (player and player.force)
+                if not force then
                     rcon.print("{}")
                     return false
                 end
-                local recipe = player.force.recipes[item_name]
+                local recipe = force.recipes[item_name]
                 if not recipe then
                     rcon.print("{}")
                     return false
@@ -401,21 +579,35 @@ function ____exports.create_tools_remote_interface(self)
                 return true
             end,
             scan_entities = function(radius, player_id)
-                local player = get_target_player(player_id)
-                if not player or not player.character then
+                local bot = get_companion_body()
+                if not bot or not bot.valid then
                     rcon.print('{"player":{"x":0,"y":0},"entities":[]}')
                     return false
                 end
                 radius = tonumber(radius) or 15
-                local entities = player.surface.find_entities_filtered({
-                    position = player.position,
+                local entities = bot.surface.find_entities_filtered({
+                    position = bot.position,
                     radius = radius
                 })
+
+				-- Внутри scan_entities (control.lua)
+				local human = get_target_player(1)
+                local human_data = nil
+                if human and human.character and human.character.valid then
+                    human_data = {
+                        name = human.name,
+                        x = math.floor(human.position.x * 10) / 10,
+                        y = math.floor(human.position.y * 10) / 10,
+                        surface = human.surface.name
+                    }
+                end
+
                 local result = {
                     player = {
-                        x = math.floor(player.position.x * 10) / 10,
-                        y = math.floor(player.position.y * 10) / 10
+                        x = math.floor(bot.position.x * 10) / 10,
+                        y = math.floor(bot.position.y * 10) / 10
                     },
+                    human_player = human_data,
                     entities = {},
                     telemetry = {
                         power_satisfaction = 1.0,
@@ -424,24 +616,28 @@ function ____exports.create_tools_remote_interface(self)
                     }
                 }
 
-                -- 1. Base telemetry: Power grid
-                local poles = player.surface.find_entities_filtered({
-                    position = player.position,
+                local poles = bot.surface.find_entities_filtered({
+                    position = bot.position,
                     radius = 40,
                     type = "electric-pole"
                 })
                 if #poles > 0 and poles[1].valid and poles[1].electric_network_statistics then
                     local net = poles[1].electric_network_statistics
-                    local p_out = net.get_flow_count({name = "electric-energy-produced", input = false, precision_index = defines.flow_precision_index.five_seconds})
-                    local p_in = net.get_flow_count({name = "electric-energy-consumed", input = true, precision_index = defines.flow_precision_index.five_seconds})
+                    local p_out = 0
+                    local p_in = 0
+                    if net.output_counts then
+                        for _, val in pairs(net.output_counts) do p_out = p_out + val end
+                    end
+                    if net.input_counts then
+                        for _, val in pairs(net.input_counts) do p_in = p_in + val end
+                    end
                     if p_in > 0 then
                         result.telemetry.power_satisfaction = math.floor(math.min(1.0, p_out / p_in) * 100) / 100
                     end
                 end
 
-                -- 2. Base telemetry: Low fuel boilers (< 5 items)
-                local boilers = player.surface.find_entities_filtered({
-                    force = player.force,
+                local boilers = bot.surface.find_entities_filtered({
+                    force = bot.force,
                     name = "boiler"
                 })
                 for _, b in ipairs(boilers) do
@@ -453,8 +649,10 @@ function ____exports.create_tools_remote_interface(self)
                     end
                 end
 
-                -- 3. Base telemetry: Logistic network overview (if active)
-                local log_net = player.surface.find_logistic_network_by_position(player.position, player.force)
+                local log_net = bot.surface.find_logistic_network_by_position(bot.position, bot.force)
+                if not log_net and bot.logistic_network then
+                    log_net = bot.logistic_network
+                end
                 if log_net and log_net.valid then
                     result.telemetry.logistic_network = {
                         available_logistic_bots = log_net.available_logistic_robots,
@@ -465,48 +663,69 @@ function ____exports.create_tools_remote_interface(self)
                 end
 
                 local ore_added = {}
+                local tree_count = 0
+                local rock_count = 0
                 
                 for _, ent in ipairs(entities) do
-                    if ent.valid and ent ~= player.character then
-                        if ent.type ~= "tree" then
-                            if ent.type == "resource" then
-                                if not ore_added[ent.name] or ore_added[ent.name] < 2 then
-                                    ore_added[ent.name] = (ore_added[ent.name] or 0) + 1
-                                    table.insert(result.entities, {
-                                        id = 0,
-                                        name = ent.name,
-                                        type = ent.type,
-                                        x = math.floor(ent.position.x * 10) / 10,
-                                        y = math.floor(ent.position.y * 10) / 10
-                                    })
-                                end
-                            else
-                                local ent_data = {
+                    if ent.valid and ent ~= bot then
+                        if ent.type == "tree" then
+                            tree_count = tree_count + 1
+                            if tree_count <= 5 then
+                                table.insert(result.entities, {
                                     id = ent.unit_number or 0,
+                                    name = ent.name,
+                                    type = "tree",
+                                    x = math.floor(ent.position.x * 10) / 10,
+                                    y = math.floor(ent.position.y * 10) / 10
+                                })
+                            end
+                        elseif ent.type == "simple-entity" then
+                            rock_count = rock_count + 1
+                            if rock_count <= 3 then
+                                table.insert(result.entities, {
+                                    id = ent.unit_number or 0,
+                                    name = ent.name,
+                                    type = "rock",
+                                    x = math.floor(ent.position.x * 10) / 10,
+                                    y = math.floor(ent.position.y * 10) / 10
+                                })
+                            end
+                        elseif ent.type == "resource" then
+                            if not ore_added[ent.name] or ore_added[ent.name] < 2 then
+                                ore_added[ent.name] = (ore_added[ent.name] or 0) + 1
+                                table.insert(result.entities, {
+                                    id = 0,
                                     name = ent.name,
                                     type = ent.type,
                                     x = math.floor(ent.position.x * 10) / 10,
                                     y = math.floor(ent.position.y * 10) / 10
-                                }
+                                })
+                            end
+                        else
+                            local ent_data = {
+                                id = ent.unit_number or 0,
+                                name = ent.name,
+                                type = ent.type,
+                                x = math.floor(ent.position.x * 10) / 10,
+                                y = math.floor(ent.position.y * 10) / 10
+                            }
 
-                                -- Inspect chest contents if entity is a container
-                                if ent.type == "container" or ent.type == "logistic-container" then
-                                    local c_inv = ent.get_inventory(defines.inventory.chest)
-                                    if c_inv and not c_inv.is_empty() then
-                                        ent_data.items = {}
-                                        local contents = c_inv.get_contents()
-                                        for k, v in pairs(contents) do
-                                            if type(v) == "table" and v.name then
-                                                ent_data.items[v.name] = (ent_data.items[v.name] or 0) + (v.count or 1)
-                                            elseif type(k) == "string" then
-                                                ent_data.items[k] = v
-                                            end
+                            if ent.type == "container" or ent.type == "logistic-container" then
+                                local c_inv = ent.get_inventory(defines.inventory.chest)
+                                if c_inv and not c_inv.is_empty() then
+                                    ent_data.items = {}
+                                    local contents = c_inv.get_contents()
+                                    for k, v in pairs(contents) do
+                                        if type(v) == "table" and v.name then
+                                            ent_data.items[v.name] = (ent_data.items[v.name] or 0) + (v.count or 1)
+                                        elseif type(k) == "string" then
+                                            ent_data.items[k] = v
                                         end
                                     end
                                 end
-
-                                table.insert(result.entities, ent_data)
                             end
+
+                            table.insert(result.entities, ent_data)
                         end
                     end
                 end
@@ -542,6 +761,38 @@ create_tools_remote_interface(nil)
 local setup_complete = false
 local task_manager = new_task_manager(nil)
 
+local function parse_direction(dir)
+    if dir == nil then return defines.direction.north end
+
+    if type(dir) == "string" then
+        local s = string.lower(dir)
+        if s == "north" or s == "up" or s == "север" or s == "вверх" or s == "n" then
+            return defines.direction.north
+        end
+        if s == "east" or s == "right" or s == "восток" or s == "вправо" or s == "e" then
+            return defines.direction.east
+        end
+        if s == "south" or s == "down" or s == "юг" or s == "вниз" or s == "s" then
+            return defines.direction.south
+        end
+        if s == "west" or s == "left" or s == "запад" or s == "влево" or s == "w" then
+            return defines.direction.west
+        end
+    end
+
+    local n = tonumber(dir)
+    if n then
+        if n == 0 then return defines.direction.north end
+        if n == 8 then return defines.direction.south end
+        if n == 12 then return defines.direction.west end
+        if n == 4 then return defines.direction.east end
+        if n == 2 then return defines.direction.east end
+        if n == 6 then return defines.direction.west end
+    end
+
+    return defines.direction.north
+end
+
 remote.add_interface(
     "autorio_operations",
     {
@@ -551,11 +802,11 @@ remote.add_interface(
                 type = TaskStates.WALKING_DIRECT,
                 target_position = target
             })
-            log("[AUTORIO] New walk_to task: " .. serpent.line(target))
+            log("[AUTORIO] Companion walk_to task: " .. serpent.line(target))
             return true
         end,
         walk_to_entity = function(entity_name, search_radius)
-            log("[AUTORIO] New walk_to_entity task: " .. entity_name .. ", radius: " .. tostring(search_radius))
+            log("[AUTORIO] Companion walk_to_entity task: " .. entity_name .. ", radius: " .. tostring(search_radius))
             task_manager:add_task({
                 type = TaskStates.WALKING_TO_ENTITY,
                 entity_name = entity_name,
@@ -567,6 +818,44 @@ remote.add_interface(
                 target_position = nil
             })
             return true
+        end,
+		walk_to_player = function()
+            local human = get_target_player(1)
+            if not human or not human.character or not human.character.valid then
+                log("[AUTORIO] Cannot walk to player: human character not found")
+                return false
+            end
+
+            local target = {
+                x = math.floor(human.position.x * 10) / 10,
+                y = math.floor(human.position.y * 10) / 10
+            }
+
+            task_manager:add_task({
+                type = TaskStates.WALKING_DIRECT,
+                target_position = target
+            })
+            log("[AUTORIO] Companion walk_to_player task queued to: " .. serpent.line(target))
+            return true
+        end,
+        tagSelectedEntity = function(label, category)
+            if type(label) == "table" then
+                category = label.category
+                label = label.label
+            end
+
+            local known_cats = { critical = true, production = true, temporary = true }
+            if type(label) == "string" and known_cats[label] and category and not known_cats[category] then
+                local temp = label
+                label = category
+                category = temp
+            end
+
+            local tools = remote.interfaces["autorio_tools"]
+            if tools and tools["tag_selected_entity"] then
+                return remote.call("autorio_tools", "tag_selected_entity", label or "Node", category or "critical", 1)
+            end
+            return false
         end,
         mine_entity = function(entity_name, count)
             if count == nil then count = 1 end
@@ -582,9 +871,9 @@ remote.add_interface(
                 type = TaskStates.PLACING,
                 entity_name = entity_name,
                 position = pos,
-                direction = direction and tonumber(direction) or nil
+                direction = parse_direction(direction)
             })
-            log("[AUTORIO] New place_entity task: " .. entity_name .. (pos and (" at " .. serpent.line(pos)) or ""))
+            log("[AUTORIO] Companion place_entity task: " .. entity_name .. (pos and (" at " .. serpent.line(pos)) or ""))
             return true
         end,
         move_items = function(item_name, entity_name, max_count, to_entity, target_x, target_y)
@@ -611,7 +900,7 @@ remote.add_interface(
                 stuck_ticks = 0,
                 last_pos = nil
             })
-            log("[AUTORIO] New build_ghosts task started")
+            log("[AUTORIO] Companion build_ghosts task started")
             return {true, "Ghost construction started"}
         end,
         wait = function(ticks)
@@ -620,9 +909,9 @@ remote.add_interface(
         end,
         craft_item = function(item_name, count)
             if count == nil then count = 1 end
-            local player = get_target_player(1)
-            if not player then return {false, "No player"} end
-            local recipe = player.force.recipes[item_name]
+            local bot = get_companion_body()
+            if not bot then return {false, "No companion"} end
+            local recipe = bot.force.recipes[item_name]
             if not recipe then
                 return {false, "Recipe not available"}
             end
@@ -632,15 +921,26 @@ remote.add_interface(
             task_manager:add_task({type = TaskStates.CRAFTING, item_name = item_name, count = count, crafted = 0})
             return {true, "Task started"}
         end,
+		equip_armor = function(armor_name)
+			local bot = get_companion_body()
+			if not bot or not bot.valid then return false end
+
+			task_manager:add_task({
+				type = TaskStates.EQUIPPING_ARMOR,
+				armor_name = armor_name or ""
+			})
+			log("[AUTORIO] Companion equip_armor queued: " .. tostring(armor_name))
+			return true
+		end,
         attack_nearest_enemy = function(search_radius)
             if search_radius == nil then search_radius = 50 end
             task_manager:add_task({type = TaskStates.ATTACKING, search_radius = search_radius, target = nil})
             return {true, "Task started"}
         end,
         research_technology = function(technology_name)
-            local player = get_target_player(1)
-            if not player then return {false, "No player"} end
-            local force = player.force
+            local bot = get_companion_body()
+            local force = bot and bot.force or (get_target_player(1) and get_target_player(1).force)
+            if not force then return {false, "No force available"} end
             local tech = force.technologies[technology_name]
             if not tech then return {false, "Technology not found"} end
             if tech.researched then return {false, "Already researched"} end
@@ -651,16 +951,16 @@ remote.add_interface(
         end,
         deconstruct_area = function(radius)
             local rad = tonumber(radius) or 35
-            local player = get_target_player(1)
-            if not player then return false end
+            local bot = get_companion_body()
+            if not bot then return false end
             
-            local entities = player.surface.find_entities_filtered{
-                position = player.position,
+            local entities = bot.surface.find_entities_filtered{
+                position = bot.position,
                 radius = rad,
-                force = player.force
+                force = bot.force
             }
             for _, ent in ipairs(entities) do
-                if ent.valid and ent ~= player.character and ent.type ~= "entity-ghost" then
+                if ent.valid and ent ~= bot and ent.type ~= "entity-ghost" then
                     task_manager:add_task({
                         type = TaskStates.MINING,
                         entity_name = ent.name,
@@ -669,7 +969,7 @@ remote.add_interface(
                     })
                 end
             end
-            log("[AUTORIO] New deconstruct_area task queued")
+            log("[AUTORIO] Companion deconstruct_area task queued")
             return true
         end,
         cancel_all_tasks = function()
@@ -692,12 +992,12 @@ local function get_direction(self, start_position, end_position)
     return defines.direction.southeast
 end
 
-local function get_nearest_entity(self, player, entities)
+local function get_nearest_entity(self, bot, entities)
     local min_distance = math.huge
     local nearest_entity = nil
     if #entities == 0 then return nil end
     for ____, entity in ipairs(entities) do
-        local dist = (entity.position.x - player.position.x) ^ 2 + (entity.position.y - player.position.y) ^ 2
+        local dist = (entity.position.x - bot.position.x) ^ 2 + (entity.position.y - bot.position.y) ^ 2
         if dist < min_distance then
             min_distance = dist
             nearest_entity = entity
@@ -706,70 +1006,37 @@ local function get_nearest_entity(self, player, entities)
     return nearest_entity
 end
 
-local function start_mining(self, player, entity_position)
-    player.update_selected_entity(entity_position)
-    player.mining_state = {mining = true, position = entity_position}
-end
-
-script.on_event(defines.events.on_script_path_request_finished, function(event)
-    if task_manager.player_state.task_state ~= TaskStates.WALKING_TO_ENTITY then return end
-    if not task_manager.player_state.parameters_walk_to_entity then return end
-    if not event.path then
-        task_manager.player_state.task_state = TaskStates.WALKING_DIRECT
-        task_manager.player_state.parameters_walking_direct = {
-            type = TaskStates.WALKING_DIRECT,
-            target_position = task_manager.player_state.parameters_walk_to_entity.target_position
-        }
-        task_manager.player_state.parameters_walk_to_entity = nil
-        return
-    end
-    task_manager.player_state.parameters_walk_to_entity.path = event.path
-    task_manager.player_state.parameters_walk_to_entity.path_drawn = false
-    task_manager.player_state.parameters_walk_to_entity.path_index = 1
-    task_manager.player_state.parameters_walk_to_entity.calculating_path = false
-end)
-
-script.on_event(defines.events.on_player_mined_entity, function(unused_event)
-    if task_manager.player_state.task_state ~= TaskStates.MINING then return end
-    if not task_manager.player_state.parameters_mine_entity then return end
-    if task_manager.player_state.parameters_mine_entity.count <= 0 then
-        task_manager:reset_task_state()
-        task_manager:next_task()
-        return
-    end
-    task_manager.player_state.parameters_mine_entity.count = task_manager.player_state.parameters_mine_entity.count - 1
-end)
-
 local function setup(self)
     local surface = game.surfaces[1]
     local enemies = surface.find_entities_filtered({force = "enemy"})
     for ____, enemy in ipairs(enemies) do
         enemy.destroy()
     end
+    get_companion_body()
     setup_complete = true
-    log("[AUTORIO] Setup complete")
+    log("[AUTORIO] Setup complete with companion bot")
 end
 
-local function follow_path(self, player, path)
+local function follow_path(self, bot, path)
     if #path == 0 then return true end
     local next_position = path[1].position
-    local d = distance(nil, next_position, player.position)
+    local d = distance(nil, next_position, bot.position)
     if d < 0.1 then
         table.remove(path, 1)
         return false
     end
-    local dir = get_direction(nil, player.position, next_position)
-    player.walking_state = {walking = true, direction = dir}
+    local dir = get_direction(nil, bot.position, next_position)
+    bot.walking_state = {walking = true, direction = dir}
     return false
 end
 
-local function state_walking_to_entity(self, player)
+local function state_walking_to_entity(self, bot)
     local params = task_manager.player_state.parameters_walk_to_entity
     if not params then return end
     if params.calculating_path then return end
     if params.path then
-        if follow_path(nil, player, params.path) then
-            player.walking_state = {walking = false}
+        if follow_path(nil, bot, params.path) then
+            bot.walking_state = {walking = false}
             task_manager:reset_task_state()
             task_manager:next_task()
         end
@@ -777,21 +1044,21 @@ local function state_walking_to_entity(self, player)
     end
     local filter = build_safe_entity_filter(
         params.entity_name, 
-        player.position, 
+        bot.position, 
         params.search_radius, 
-        player.force
+        bot.force
     )
 
     if not filter then
-        log("[AUTORIO] [ERROR] Unknown entity or category: " .. tostring(params.entity_name))
-        game.print("[AI Agent]: I cannot find target '" .. tostring(params.entity_name) .. "' (unknown entity).")
+        log("[AUTORIO] [ERROR] Unknown entity: " .. tostring(params.entity_name))
+        game.print("[AI Companion]: Unknown target entity '" .. tostring(params.entity_name) .. "'.")
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
     local success, entities = pcall(function()
-        return player.surface.find_entities_filtered(filter)
+        return bot.surface.find_entities_filtered(filter)
     end)
 
     if not success or not entities or #entities == 0 then
@@ -800,22 +1067,20 @@ local function state_walking_to_entity(self, player)
         task_manager:next_task()
         return
     end
-    local nearest_entity = get_nearest_entity(nil, player, entities)
+    local nearest_entity = get_nearest_entity(nil, bot, entities)
     if nearest_entity and not params.calculating_path then
-        local character = player.character
-        if not character then return end
         local bbox = {{-0.5, -0.5}, {0.5, 0.5}}
-        local start = player.surface.find_non_colliding_position("iron-chest", character.position, 10, 0.5, false)
+        local start = bot.surface.find_non_colliding_position("iron-chest", bot.position, 10, 0.5, false)
         if not start then return end
         local collision_mask = {layers = {player = true, train = true, water_tile = true, object = true}, consider_tile_transitions = true}
-        player.surface.request_path({
+        bot.surface.request_path({
             bounding_box = bbox,
             collision_mask = collision_mask,
             radius = 2,
             start = start,
             goal = nearest_entity.position,
-            force = player.force,
-            entity_to_ignore = character,
+            force = bot.force,
+            entity_to_ignore = bot,
             pathfind_flags = {cache = false, no_break = true, prefer_straight_paths = false, allow_paths_through_own_entities = false}
         })
         params.calculating_path = true
@@ -823,110 +1088,147 @@ local function state_walking_to_entity(self, player)
     end
 end
 
-local function state_mining(self, player)
+local function state_mining(self, bot)
     local params = task_manager.player_state.parameters_mine_entity
     if not params then return end
 
+    -- Режим 1: Снос по координатам (deconstruct_area / демонтаж зданий)
     if params.position then
-        local target_ents = player.surface.find_entities_filtered({position = params.position, radius = 0.8, force = player.force})
-        local has_target = false
+        local target_ents = bot.surface.find_entities_filtered({position = params.position, radius = 1.2, force = bot.force})
+        local target_ent = nil
         for _, e in ipairs(target_ents) do
-            if e.valid and e ~= player.character then
-                has_target = true
+            if e.valid and e ~= bot and e.type ~= "entity-ghost" then
+                target_ent = e
                 break
             end
         end
-        if not has_target then
-            -- Entity already mined / gone
-            player.walking_state = {walking = false}
+
+        if not target_ent then
+            bot.walking_state = {walking = false}
             task_manager:reset_task_state()
             task_manager:next_task()
             return
         end
 
-        local d = (params.position.x - player.position.x)^2 + (params.position.y - player.position.y)^2
-        if d > 9.0 then
-            local dir = get_direction(nil, player.position, params.position)
-            player.walking_state = {walking = true, direction = dir}
-            return
+        local dist_sq = (target_ent.position.x - bot.position.x)^2 + (target_ent.position.y - bot.position.y)^2
+        -- Здания демонтируются на честной дистанции 8 клеток
+        if dist_sq <= 64.0 then
+            bot.walking_state = {walking = false}
+            bot.mine_entity(target_ent, true)
+            task_manager:reset_task_state()
+            task_manager:next_task()
         else
-            player.walking_state = {walking = false}
-            if not player.mining_state.mining then
-                start_mining(nil, player, params.position)
-            end
-            return
+            local dir = get_direction(nil, bot.position, target_ent.position)
+            bot.walking_state = {walking = true, direction = dir}
         end
+        return
     end
 
-    local filter = build_safe_entity_filter(
-        params.entity_name, 
-        player.position, 
-        15, 
-        player.force
-    )
+    -- Режим 2: Рубка деревьев, камней и добыча руды
+    local target = params.current_target
+    
+    if target and target.valid then
+        local dist_sq = (target.position.x - bot.position.x)^2 + (target.position.y - bot.position.y)^2
+        local in_reach = bot.can_reach_entity(target) or (dist_sq <= 5.0)
+        
+        if in_reach then
+            bot.walking_state = {walking = false}
 
+            -- 1. Считаем сколько предметов было в рюкзаке бота до вызова
+            local inv = bot.get_main_inventory()
+            local total_before = inv and inv.get_item_count() or 0
+
+            -- 2. Добываем
+            local success = bot.mine_entity(target, true)
+
+            -- 3. Считаем, сколько предметов добавилось (для руды всегда +1 за вызов)
+            local total_after = inv and inv.get_item_count() or total_before
+            local gained = total_after - total_before
+
+            if gained > 0 then
+                params.count = (params.count or 1) - gained
+            else
+                -- Если это дерево/камень и сущность просто разрушилась
+                params.count = (params.count or 1) - 1
+            end
+
+            -- 4. Если набрали нужное количество (например, 100) — СТОП
+            if (params.count or 0) <= 0 then
+                params.current_target = nil
+                bot.walking_state = {walking = false}
+                task_manager:reset_task_state()
+                task_manager:next_task()
+                return
+            end
+
+            -- Если конкретный тайл руды или дерево всё же иссякли
+            if not target.valid then
+                params.current_target = nil
+            end
+        else
+            local dir = get_direction(nil, bot.position, target.position)
+            bot.walking_state = {walking = true, direction = dir}
+        end
+        return
+    end
+
+    params.current_target = nil
+
+    local filter = build_safe_entity_filter(params.entity_name, bot.position, 35, bot.force)
     if not filter then
-        player.walking_state = {walking = false}
+        bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
     local success, entities = pcall(function()
-        return player.surface.find_entities_filtered(filter)
+        return bot.surface.find_entities_filtered(filter)
     end)
 
     if not success or not entities or #entities == 0 then
-        player.walking_state = {walking = false}
+        bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
-    local nearest = get_nearest_entity(nil, player, entities)
+    local nearest = get_nearest_entity(nil, bot, entities)
     if not nearest then
-        player.walking_state = {walking = false}
+        bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
-    if not player.can_reach_entity(nearest) then
-        local dir = get_direction(nil, player.position, nearest.position)
-        player.walking_state = {walking = true, direction = dir}
-    else
-        player.walking_state = {walking = false}
-        if not player.mining_state.mining then
-            start_mining(nil, player, nearest.position)
-        end
-    end
+    params.current_target = nearest
 end
 
-local function state_placing(self, player)
-    if not player then
+local function state_placing(self, bot)
+    if not bot or not bot.valid then
         task_manager:reset_task_state()
         task_manager:next_task()
-        return {false, "Invalid player"}
+        return {false, "Invalid companion"}
     end
     local params = task_manager.player_state.parameters_place_entity
     if not params then return end
-    local surface = player.surface
-    local inventory = player.get_main_inventory()
+    local surface = bot.surface
+    local inventory = bot.get_main_inventory()
     if not inventory then
         task_manager:reset_task_state()
         task_manager:next_task()
-        return {false, "Cannot access player inventory"}
+        return {false, "Cannot access companion inventory"}
     end
     local item_stack, _ = inventory.find_item_stack(params.entity_name)
     if not item_stack or item_stack.count == 0 then
-        log("[AUTORIO] Entity not found in inventory: " .. params.entity_name)
-        game.print("[AI Agent]: Cannot place '" .. params.entity_name .. "' (not in inventory).")
+        log("[AUTORIO] Entity not found in companion inventory: " .. params.entity_name)
+        game.print("[AI Companion]: Cannot place '" .. params.entity_name .. "' (not in bot inventory).")
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
     if not params.position then
-        params.position = surface.find_non_colliding_position(params.entity_name, player.position, 1, 1)
+        params.position = surface.find_non_colliding_position(params.entity_name, bot.position, 1, 1)
         if not params.position then
             task_manager:reset_task_state()
             task_manager:next_task()
@@ -934,10 +1236,9 @@ local function state_placing(self, player)
         end
     end
 
-    -- Prevent ghost overlapping / double placements on occupied tiles
-    if not surface.can_place_entity({name = params.entity_name, position = params.position, direction = params.direction, force = player.force}) then
-        log("[AUTORIO] Tile is already occupied for " .. params.entity_name .. " at " .. serpent.line(params.position))
-        game.print("[AI Agent]: Cannot place '" .. params.entity_name .. "' - tile is occupied.")
+    if not surface.can_place_entity({name = params.entity_name, position = params.position, direction = params.direction, force = bot.force}) then
+        log("[AUTORIO] Tile is occupied for " .. params.entity_name .. " at " .. serpent.line(params.position))
+        game.print("[AI Companion]: Cannot place '" .. params.entity_name .. "' - tile occupied.")
         task_manager:reset_task_state()
         task_manager:next_task()
         return {false, "Tile is occupied"}
@@ -948,9 +1249,8 @@ local function state_placing(self, player)
         name = params.entity_name,
         position = params.position,
         direction = params.direction,
-        force = player.force,
-        raise_built = true,
-        player = player
+        force = bot.force,
+        raise_built = true
     }
     local entity = surface.create_entity(create_entity_args)
     if entity then
@@ -966,18 +1266,30 @@ local function state_placing(self, player)
     return {false, "Failed to place entity"}
 end
 
-local function state_moving_items(self, player)
+local function state_moving_items(self, bot)
     local parameters = task_manager.player_state.parameters_move_items
     if not parameters then return end
+
+    -- Если переданы точные координаты целевого контейнера
+    if parameters.target_position then
+        local dist_sq = (parameters.target_position.x - bot.position.x)^2 + (parameters.target_position.y - bot.position.y)^2
+        -- Если бот ещё не подошёл к ящику (дальше 2.5 клеток) — бежим к нему
+        if dist_sq > 6.25 then
+            local dir = get_direction(nil, bot.position, parameters.target_position)
+            bot.walking_state = {walking = true, direction = dir}
+            return
+        else
+            bot.walking_state = {walking = false}
+        end
+    end
+
+    local filter_args = {position = bot.position, radius = 10, name = parameters.entity_name, force = bot.force}
+    local nearby_entities = bot.surface.find_entities_filtered(filter_args)
     
-    local filter_args = {position = player.position, radius = 10, name = parameters.entity_name, force = player.force}
-    local nearby_entities = player.surface.find_entities_filtered(filter_args)
-    
-    -- Tolerance expanded to 1.5 tiles to cover centers of 2x2 and 3x3 structures
     if parameters.target_position then
         local exact_entities = {}
         for _, ent in ipairs(nearby_entities) do
-            if math.abs(ent.position.x - parameters.target_position.x) < 1.5 and math.abs(ent.position.y - parameters.target_position.y) < 1.5 then
+            if math.abs(ent.position.x - parameters.target_position.x) < 2.0 and math.abs(ent.position.y - parameters.target_position.y) < 2.0 then
                 table.insert(exact_entities, ent)
             end
         end
@@ -986,15 +1298,17 @@ local function state_moving_items(self, player)
         end
     end
 
-    local player_inventory = player.get_main_inventory()
-    if not player_inventory then
+    local bot_inventory = bot.get_main_inventory()
+    if not bot_inventory or #nearby_entities == 0 then
+        bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
+
     local moved_total = 0
     if parameters.to_entity then
-        local item_stack, _ = player_inventory.find_item_stack(parameters.item_name)
+        local item_stack, _ = bot_inventory.find_item_stack(parameters.item_name)
         if not item_stack then
             task_manager:reset_task_state()
             task_manager:next_task()
@@ -1010,7 +1324,7 @@ local function state_moving_items(self, player)
                     if to_move > 0 then
                         local moved = inv.insert({name = parameters.item_name, count = to_move})
                         if moved > 0 then
-                            player_inventory.remove({name = parameters.item_name, count = moved})
+                            bot_inventory.remove({name = parameters.item_name, count = moved})
                             moved_total = moved_total + moved
                         end
                     end
@@ -1027,7 +1341,7 @@ local function state_moving_items(self, player)
                 if inv then
                     local removed = inv.remove({name = parameters.item_name, count = parameters.max_count - moved_total})
                     if removed > 0 then
-                        local inserted = player_inventory.insert({name = parameters.item_name, count = removed})
+                        local inserted = bot_inventory.insert({name = parameters.item_name, count = removed})
                         if inserted < removed then
                             inv.insert({name = parameters.item_name, count = removed - inserted})
                             moved_total = moved_total + inserted
@@ -1040,11 +1354,13 @@ local function state_moving_items(self, player)
             end
         end
     end
+
+    bot.walking_state = {walking = false}
     task_manager:reset_task_state()
     task_manager:next_task()
 end
 
-local function state_walking_direct(self, player)
+local function state_walking_direct(self, bot)
     local params = task_manager.player_state.parameters_walking_direct
     if not params or not params.target_position then
         task_manager:reset_task_state()
@@ -1052,46 +1368,44 @@ local function state_walking_direct(self, player)
         return
     end
     local target = params.target_position
-    local dir = get_direction(nil, player.position, target)
-    player.walking_state = {walking = true, direction = dir}
-    if (target.x - player.position.x) ^ 2 + (target.y - player.position.y) ^ 2 < 1.0 then
-        player.walking_state = {walking = false}
+    local dir = get_direction(nil, bot.position, target)
+    bot.walking_state = {walking = true, direction = dir}
+    if (target.x - bot.position.x) ^ 2 + (target.y - bot.position.y) ^ 2 < 1.0 then
+        bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
     end
 end
 
--- Autonomous Ghost Construction ("Live Drone") Engine
-local function state_building_ghosts(self, player)
+local function state_building_ghosts(self, bot)
     local params = task_manager.player_state.parameters_build_ghosts
     if not params then return end
 
     if params.built_count >= params.max_count then
-        player.walking_state = {walking = false}
-        game.print("[AI Agent]: Finished blueprint construction limit (" .. tostring(params.built_count) .. " entities).")
+        bot.walking_state = {walking = false}
+        game.print("[AI Companion]: Finished blueprint construction limit (" .. tostring(params.built_count) .. " entities).")
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
-    local ghosts = player.surface.find_entities_filtered({
-        position = player.position,
+    local ghosts = bot.surface.find_entities_filtered({
+        position = bot.position,
         radius = params.radius,
         type = "entity-ghost"
     })
 
     if #ghosts == 0 then
-        player.walking_state = {walking = false}
-        game.print("[AI Agent]: No ghosts left to construct in radius " .. tostring(params.radius) .. ".")
+        bot.walking_state = {walking = false}
+        game.print("[AI Companion]: No ghosts left in radius " .. tostring(params.radius) .. ".")
         task_manager:reset_task_state()
         task_manager:next_task()
         return
     end
 
-    local inv = player.get_main_inventory()
+    local inv = bot.get_main_inventory()
     if not inv then return end
 
-    -- 1. Find the closest ghost for which we already have items in inventory
     local best_ghost = nil
     local best_dist = math.huge
     local missing_item_name = nil
@@ -1100,7 +1414,7 @@ local function state_building_ghosts(self, player)
         if ghost.valid then
             local item_name = ghost.ghost_name
             local item_count = inv.get_item_count(item_name)
-            local d = (ghost.position.x - player.position.x)^2 + (ghost.position.y - player.position.y)^2
+            local d = (ghost.position.x - bot.position.x)^2 + (ghost.position.y - bot.position.y)^2
             
             if item_count > 0 then
                 if d < best_dist then
@@ -1113,23 +1427,19 @@ local function state_building_ghosts(self, player)
         end
     end
 
-    -- 2. If no ready item, manage crafting safely
     if not best_ghost then
-        player.walking_state = {walking = false}
+        bot.walking_state = {walking = false}
         
-        -- If player is currently crafting, just wait for the item to complete!
-        if player.crafting_queue_size and player.crafting_queue_size > 0 then
+        if bot.crafting_queue_size and bot.crafting_queue_size > 0 then
             return
         end
 
-        -- If not crafting, try to queue ONLY 1 item of the missing recipe
         if missing_item_name then
-            local crafted = player.begin_crafting({recipe = missing_item_name, count = 1})
+            local crafted = bot.begin_crafting({recipe = missing_item_name, count = 1})
             if crafted > 0 then
-                return -- Craft started, will build once ready
+                return
             else
-                -- Truly out of raw materials for this ghost, try to find another ghost recipe or exit
-                game.print("[AI Agent]: Missing materials to craft '" .. tostring(missing_item_name) .. "'.")
+                game.print("[AI Companion]: Missing materials to craft '" .. tostring(missing_item_name) .. "'.")
                 task_manager:reset_task_state()
                 task_manager:next_task()
                 return
@@ -1141,39 +1451,37 @@ local function state_building_ghosts(self, player)
         end
     end
 
-    -- 3. Movement and reach logic (maintain safe 4-6 tiles reach distance)
-    local d_tiles = math.sqrt(best_dist)
-    if d_tiles > 5.0 then
-        local dir = get_direction(nil, player.position, best_ghost.position)
-        player.walking_state = {walking = true, direction = dir}
+    if math.abs(bot.position.x - best_ghost.position.x) < 0.85 and math.abs(bot.position.y - best_ghost.position.y) < 0.85 then
+        bot.walking_state = {walking = true, direction = defines.direction.south}
+        return
+    end
 
-        -- Stuck Watchdog ONLY applies when actively trying to walk
-        if params.last_pos and math.abs(params.last_pos.x - player.position.x) < 0.05 and math.abs(params.last_pos.y - player.position.y) < 0.05 then
+    local d_tiles = math.sqrt(best_dist)
+    local dir = get_direction(nil, bot.position, best_ghost.position)
+
+    if d_tiles > 6.0 then
+        bot.walking_state = {walking = true, direction = dir}
+
+        if params.last_pos and math.abs(params.last_pos.x - bot.position.x) < 0.05 and math.abs(params.last_pos.y - bot.position.y) < 0.05 then
             params.stuck_ticks = (params.stuck_ticks or 0) + 1
             if params.stuck_ticks > 30 then
-                -- Jiggle movement perpendicular to break free from corners
                 local escape_dir = (dir + 4) % 16
-                player.walking_state = {walking = true, direction = escape_dir}
+                bot.walking_state = {walking = true, direction = escape_dir}
                 params.stuck_ticks = 0
             end
         else
             params.stuck_ticks = 0
         end
-        params.last_pos = {x = player.position.x, y = player.position.y}
+        params.last_pos = {x = bot.position.x, y = bot.position.y}
         return
     end
 
-    -- 4. Target in reach: stop and construct
-    player.walking_state = {walking = false}
-
-    -- Safety check: avoid building directly underneath player feet
-    if math.abs(player.position.x - best_ghost.position.x) < 0.8 and math.abs(player.position.y - best_ghost.position.y) < 0.8 then
-        local escape_dir = defines.direction.south
-        player.walking_state = {walking = true, direction = escape_dir}
-        return
+    if d_tiles > 2.5 then
+        bot.walking_state = {walking = true, direction = dir}
+    else
+        bot.walking_state = {walking = false}
     end
 
-    -- Revive ghost and consume 1 item
     local item_stack = inv.find_item_stack(best_ghost.ghost_name)
     if item_stack and item_stack.count > 0 then
         item_stack.count = item_stack.count - 1
@@ -1186,10 +1494,98 @@ local function state_building_ghosts(self, player)
     end
 end
 
-local function state_researching(self, player)
+local function state_equipping_armor(self, bot)
+    local params = task_manager.player_state.parameters_equip_armor
+    if not params then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    local minv = bot.get_main_inventory()
+    local ainv = bot.get_inventory(defines.inventory.character_armor)
+    if not minv or not ainv then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    local target_name = params.armor_name
+    if not target_name or target_name == "" then
+        for i = 1, #minv do
+            local s = minv[i]
+            if s and s.valid_for_read and prototypes.item[s.name] and prototypes.item[s.name].type == "armor" then
+                target_name = s.name
+                break
+            end
+        end
+    end
+
+    if not target_name or minv.get_item_count(target_name) == 0 then
+        log("[AUTORIO] Armor not in inventory yet during equip state")
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    if not ainv.is_empty() then
+        local cur = ainv[1]
+        if cur and cur.valid_for_read then
+            minv.insert({name = cur.name, count = 1})
+            ainv.clear()
+        end
+    end
+
+    local removed = minv.remove({name = target_name, count = 1})
+    ainv.insert({name = target_name, count = removed})
+    game.print("[AI Companion]: Successfully equipped " .. tostring(target_name) .. "!")
+
+    task_manager:reset_task_state()
+    task_manager:next_task()
+end
+
+local function state_crafting(self, bot)
+    local params = task_manager.player_state.parameters_craft_item
+    if not params then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    -- Если крафт ещё не стартовал
+    if not params.started then
+        local recipe_name = params.item_name or params.recipe_name or "stone-furnace"
+        local count = tonumber(params.count) or 1
+        
+        local queued = bot.begin_crafting{recipe = recipe_name, count = count}
+        if queued == 0 then
+            log("[AUTORIO] Cannot craft " .. tostring(recipe_name) .. ", not enough items")
+            task_manager:reset_task_state()
+            task_manager:next_task()
+            return
+        end
+        params.started = true
+        params.wait_ticks = 10 -- Даем 10 тиков движку на прогрев очереди
+        return
+    end
+
+    if params.wait_ticks and params.wait_ticks > 0 then
+        params.wait_ticks = params.wait_ticks - 1
+        return
+    end
+
+    -- Когда очередь опустела — крафт закончен
+    if bot.crafting_queue_size == 0 then
+        log("[AUTORIO] Crafting completed")
+        task_manager:reset_task_state()
+        task_manager:next_task()
+    end
+end
+
+local function state_researching(self, bot)
     local params = task_manager.player_state.parameters_research_technology
     if not params then return end
-    local force = player.force
+    local force = bot.force
     local tech = force.technologies[params.technology_name]
     if tech and (tech.researched or force.current_research ~= tech) then
         task_manager:reset_task_state()
@@ -1209,33 +1605,25 @@ end
 
 script.on_event(defines.events.on_tick, function(unused_event)
     if not setup_complete then setup(nil) end
-    local player = get_target_player(1)
-    if player == nil or player.character == nil then return end
+    local bot = get_companion_body()
+    if bot == nil or not bot.valid then return end
+    
     local state = task_manager.player_state.task_state
     if state == TaskStates.IDLE then return end
-    if state == TaskStates.WALKING_TO_ENTITY then state_walking_to_entity(nil, player)
-    elseif state == TaskStates.MINING then state_mining(nil, player)
-    elseif state == TaskStates.PLACING then state_placing(nil, player)
-    elseif state == TaskStates.MOVING_ITEMS then state_moving_items(nil, player)
-    elseif state == TaskStates.BUILDING_GHOSTS then state_building_ghosts(nil, player)
-    elseif state == TaskStates.RESEARCHING then state_researching(nil, player)
-    elseif state == TaskStates.WALKING_DIRECT then state_walking_direct(nil, player)
+    if state == TaskStates.WALKING_TO_ENTITY then state_walking_to_entity(nil, bot)
+    elseif state == TaskStates.MINING then state_mining(nil, bot)
+    elseif state == TaskStates.PLACING then state_placing(nil, bot)
+    elseif state == TaskStates.MOVING_ITEMS then state_moving_items(nil, bot)
+    elseif state == TaskStates.BUILDING_GHOSTS then state_building_ghosts(nil, bot)
+    elseif state == TaskStates.RESEARCHING then state_researching(nil, bot)
+    elseif state == TaskStates.WALKING_DIRECT then state_walking_direct(nil, bot)
     elseif state == TaskStates.WAITING then state_waiting(nil)
+	elseif state == TaskStates.EQUIPPING_ARMOR then state_equipping_armor(nil, bot)
+    elseif state == TaskStates.CRAFTING then state_crafting(nil, bot)
     end
 end)
 
-script.on_event(defines.events.on_player_crafted_item, function(event)
-    local params = task_manager.player_state.parameters_craft_item
-    if not params or task_manager.player_state.task_state ~= TaskStates.CRAFTING then return end
-    if event.recipe and event.recipe.name ~= params.item_name then return end
-    params.crafted = (params.crafted or 0) + 1
-    if params.crafted >= params.count then
-        task_manager:reset_task_state()
-        task_manager:next_task()
-    end
-end)
-
-log("[AUTORIO] Mod loaded (Enhanced Coordinates & Ghost Builder v3)")
+log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v4)")
 return ____exports
  end,
 ["utils.hot_reload"] = function(...) return {} end,
