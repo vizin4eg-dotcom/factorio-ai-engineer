@@ -8,6 +8,24 @@ Unlike pure computer-vision approaches, this project uses a high-precision **spa
 
 ---
 
+## Architecture: Autonomous Companion Bot
+
+The AI agent has been uncoupled from the player's character and migrated into a dedicated, autonomous in-game companion entity (`character`) with its own inventory and custom blue armor:
+
+- **Autonomous Entity & Navigation:**
+  - Operates without hijacking or locking the human player's controls or cursor.
+  - Supports relative navigation and partner tracking via the native `walk_to_player` operation.
+  - Telemetry observation includes both companion and human partner coordinates (`human_player`).
+
+- **Task Queue & Asynchronous State Machine:**
+  - **Manual Crafting (`CRAFTING`):** Monitored through `crafting_queue_size`; consecutive tasks (such as chest delivery) wait until the crafting queue is completely finished.
+  - **Equipment (`EQUIPPING_ARMOR`):** Queued state prevents race conditions during multi-step chains like "take from chest -> equip".
+  - **Smart Logistics (`MOVING_ITEMS`):** Automatic pathing to destination containers and furnaces prior to item transfer.
+
+- **Construction & Deconstruction:**
+  - Autonomous blueprint and ghost placement (`build_ghosts`) using materials directly from the companion's inventory.
+  - Native resource extraction and structure dismantling respecting legitimate interaction ranges (`can_reach_entity` / `reach_distance`).
+
 ## 🌟 Key Features & Improvements
 
 - **Spatial Coordinate Engine**: Custom mod operations (`walk_to(x, y)`, `place_entity(name, x, y, dir)`, `move_items(..., x, y)`) allowing sub-tile precision rather than blind target chasing.
