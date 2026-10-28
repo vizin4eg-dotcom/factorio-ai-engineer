@@ -87,4 +87,80 @@ export const tools: ToolFunction[] = [
       return response.data?.output || '{"player":{"x":0,"y":0},"entities":[]}'
     },
   },
+  {
+    name: 'equipModule',
+    description: 'Insert equipment into the companion armor grid. Armor with a grid must already be worn, and the module must be in the companion inventory. Not for crafting modules like speed-module.',
+    schema: z.object({
+      name: z.string().describe('Equipment item name, e.g. solar-panel-equipment, battery-equipment, exoskeleton-equipment, personal-roboport-equipment, energy-shield-equipment, fusion-reactor-equipment. Short aliases like solar-panel, battery, exoskeleton also work. Empty string inserts every equipment item in inventory.'),
+      count: z.union([z.number(), z.literal('all')]).optional().describe('How many to insert. Defaults to 1. "all" fills the grid.'),
+    }),
+    fn: async ({ name, count }) => {
+      const item = String(name ?? '').replace(/["\\]/g, '')
+      const countArg = count === undefined ? '1' : (typeof count === 'number' ? String(count) : '"all"')
+      logger.withFields({ name: item, count }).debug('Equipping armor module')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "equip_module", "${item}", ${countArg})` },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'removeModule',
+    description: 'Remove equipment from the companion armor grid back into inventory.',
+    schema: z.object({
+      name: z.string().describe('Equipment name to remove, or "all" to strip the grid.'),
+      count: z.union([z.number(), z.literal('all')]).optional().describe('How many to remove. Defaults to 1.'),
+    }),
+    fn: async ({ name, count }) => {
+      const item = String(name ?? 'all').replace(/["\\]/g, '')
+      const countArg = count === undefined ? '1' : (typeof count === 'number' ? String(count) : '"all"')
+      logger.withFields({ name: item, count }).debug('Removing armor module')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "remove_module", "${item}", ${countArg})` },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'enterVehicle',
+    description: 'Walk to a free car or tank and become the driver. Does not steal an occupied vehicle. Loads fuel from the companion inventory if the vehicle is empty.',
+    schema: z.object({
+      name: z.string().optional().describe('car, tank, машина, танк, or empty for the nearest free vehicle.'),
+    }),
+    fn: async ({ name }) => {
+      const vehicle = String(name ?? '').replace(/["\\]/g, '')
+      logger.withFields({ name: vehicle }).debug('Entering vehicle')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "enter_vehicle", "${vehicle}")` },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'driveTo',
+    description: 'Drive the car or tank to a coordinate. If the companion is on foot, it enters the nearest free car or tank first.',
+    schema: z.object({
+      x: z.number().describe('Target x'),
+      y: z.number().describe('Target y'),
+    }),
+    fn: async ({ x, y }) => {
+      logger.withFields({ x, y }).debug('Driving vehicle')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "drive_to", ${Number(x)}, ${Number(y)})` },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'exitVehicle',
+    description: 'Brake and get out of the current car or tank.',
+    schema: z.object({}),
+    fn: async () => {
+      logger.debug('Exiting vehicle')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_operations", "exit_vehicle")' },
+      })
+      return response.data?.output || 'true'
+    },
+  },
 ]
