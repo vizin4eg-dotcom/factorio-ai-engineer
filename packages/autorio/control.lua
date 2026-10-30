@@ -15,6 +15,30 @@ local function get_target_player(player_id)
     return nil
 end
 
+local function restore_or_arm_companion(bot)
+    if not (bot and bot.valid) then return end
+
+    -- Если есть сохраненный лут с прошлого тела — возвращаем его
+    if storage.saved_bot_items and #storage.saved_bot_items > 0 then
+        for _, item in ipairs(storage.saved_bot_items) do
+            bot.insert(item)
+        end
+        storage.saved_bot_items = nil
+        log("[AUTORIO] Companion inventory restored from previous body")
+    end
+
+    -- Проверяем наличие оружия после восстановления
+    local guns = bot.get_inventory(defines.inventory.character_guns)
+    local ammo = bot.get_inventory(defines.inventory.character_ammo)
+
+    if guns and guns.is_empty() then
+        guns.insert({name = "submachine-gun", count = 1})
+    end
+    if ammo and ammo.is_empty() then
+        ammo.insert({name = "firearm-magazine", count = 100})
+    end
+end
+
 local function get_companion_body()
     -- 1. Быстрый возврат валидной ссылки
     if storage.bot and storage.bot.valid then
@@ -24,7 +48,7 @@ local function get_companion_body()
     local player = get_target_player(1)
     local default_force = (player and player.force) or "player"
 
-    -- 2. Ищем существующего компаньона по ВСЕМ поверхностям (Наувис, Вулкан, платформы и т.д.)
+    -- 2. Ищем существующего компаньона по ВСЕМ поверхностям
     for _, surface in pairs(game.surfaces) do
         local chars = surface.find_entities_filtered{name = "character", force = default_force}
         for _, c in ipairs(chars) do
@@ -46,7 +70,143 @@ local function get_companion_body()
     }
     storage.bot.color = {r = 0.15, g = 0.45, b = 0.95, a = 1}
     log("[AUTORIO] Companion body created on surface: " .. player.surface.name)
+
+    -- Вооружаем и восстанавливаем вещи новому телу!
+    restore_or_arm_companion(storage.bot)
+
     return storage.bot
+end
+
+-- Обновление аккуратной радиометки на миникарте и карте мира
+local function update_companion_map_tag(bot)
+    if not (bot and bot.valid) then
+        if storage.companion_chart_tag and storage.companion_chart_tag.valid then
+            storage.companion_chart_tag.destroy()
+            storage.companion_chart_tag = nil
+        end
+        return
+    end
+
+    if not (storage.companion_chart_tag and storage.companion_chart_tag.valid) then
+        storage.companion_chart_tag = bot.force.add_chart_tag(bot.surface, {
+            position = bot.position,
+            text = "[color=0.3,0.7,1.0]Companion[/color]",
+            icon = {type = "item", name = "modular-armor"}
+        })
+    else
+        storage.companion_chart_tag.position = bot.position
+    end
+end
+
+-- Автоматическая перекладка патронов и оружия из рюкзака в боевые слоты
+local function auto_equip_combat_gear(bot)
+    if not (bot and bot.valid) then return end
+
+    local main_inv = bot.get_main_inventory()
+    local guns_inv = bot.get_inventory(defines.inventory.character_guns)
+    local ammo_inv = bot.get_inventory(defines.inventory.character_ammo)
+
+    if not (main_inv and guns_inv and ammo_inv) then return end
+
+    -- 1. Экипировка оружия (если слот пуст)
+    if guns_inv.is_empty() then
+        for i = 1, #main_inv do
+            local stack = main_inv[i]
+            if stack and stack.valid and stack.valid_for_read then
+                local proto = prototypes.item[stack.name] or game.item_prototypes[stack.name]
+                if proto and proto.type == "gun" then
+                    local name = stack.name
+                    if guns_inv.can_insert({name = name, count = 1}) then
+                        local inserted = guns_inv.insert({name = name, count = 1})
+                        if inserted > 0 then
+                            main_inv.remove({name = name, count = inserted})
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Дозарядка патронов в слот боеприпасов
+    for i = 1, #main_inv do
+        local stack = main_inv[i]
+        if stack and stack.valid and stack.valid_for_read then
+            local proto = prototypes.item[stack.name] or game.item_prototypes[stack.name]
+            if proto and proto.type == "ammo" then
+                local name = stack.name
+                local count = stack.count
+                local to_insert = {name = name, count = count}
+                if ammo_inv.can_insert(to_insert) then
+                    local inserted = ammo_inv.insert(to_insert)
+                    if inserted > 0 then
+                        main_inv.remove({name = name, count = inserted})
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Боевая автооборона компаньона
+local function process_companion_defense(bot, tick)
+    -- Проверка каждые 6 тиков (10 выстрелов в секунду)
+    if tick % 6 ~= 0 then return end
+    if not (bot and bot.valid) then return end
+
+    local enemies = bot.surface.find_entities_filtered{
+        position = bot.position,
+        radius = 18,
+        force = "enemy"
+    }
+    if #enemies == 0 then return end
+    
+    -- Подтягиваем патроны и оружие из рюкзака в боевые слоты
+    auto_equip_combat_gear(bot)
+
+    -- Ищем первую валидную цель, обладающую здоровьем
+    local target = nil
+    for _, e in pairs(enemies) do
+        if e.valid and e.is_entity_with_health and e.health and e.health > 0 then
+            target = e
+            break
+        end
+    end
+
+    -- ЕСЛИ ЖИВОЙ ЦЕЛИ НЕТ — ПРЕКРАЩАЕМ ВЫПОЛНЕНИЕ:
+    if not (target and target.valid) then return end
+
+    -- Безопасный сброс ходьбы: проверяем, доступен ли task_manager
+    if task_manager and task_manager.player_state then
+        local cur_state = task_manager.player_state.task_state
+        if storage.is_following and (cur_state == TaskStates.WALKING_TO_ENTITY or cur_state == TaskStates.WALKING_DIRECT) then
+            task_manager:reset_task_state()
+        end
+    end
+    
+    -- В любом случае сразу останавливаем ноги бота для открытия огня
+    local riding = false
+    local ok_vehicle, ridden = pcall(function() return bot.vehicle end)
+    if ok_vehicle and ridden and ridden.valid then riding = true end
+    if storage.is_following and not riding then
+        bot.walking_state = {walking = false}
+    end
+
+    -- Проверяем наличие патронов в слоте боеприпасов
+    local ammo_inv = bot.get_inventory(defines.inventory.character_ammo)
+    if not ammo_inv or ammo_inv.is_empty() then return end
+
+    local ammo_stack = ammo_inv[1]
+    if not (ammo_stack and ammo_stack.valid_for_read) then return end
+
+    -- Поворачиваемся лицом к цели
+    local angle = math.atan2(target.position.y - bot.position.y, target.position.x - bot.position.x)
+    local octant = math.floor((angle + math.pi) / (2 * math.pi) * 8 + 0.5) % 8
+    bot.direction = (octant * 2) % 16
+
+    -- Наносим честный урон и тратим боеприпас
+    target.damage(16, bot.force, "physical", bot)
+    ammo_stack.drain_ammo(1)
 end
 
 local function build_safe_entity_filter(target_name, center_pos, radius, force)
@@ -134,15 +294,37 @@ function ____exports.get_inventory_items(self, player_id)
     local bot = get_companion_body()
     if not bot or not bot.valid then return {} end
     local main_inventory = bot.get_main_inventory()
-    if not main_inventory then
-        return {}
+    local items = {}
+    if main_inventory then
+        items = __TS__ArrayMap(
+            main_inventory.get_contents(),
+            function(____, binding)
+                return {name = binding.name, count = binding.count}
+            end
+        )
     end
-    return __TS__ArrayMap(
-        main_inventory.get_contents(),
-        function(____, binding)
-            return {name = binding.name, count = binding.count}
+    local armor_name = "none"
+    local armor_grid = {}
+    local ainv = bot.get_inventory(defines.inventory.character_armor)
+    if ainv and not ainv.is_empty() then
+        local worn = ainv[1]
+        if worn and worn.valid_for_read then
+            armor_name = worn.name
+            local grid = worn.grid
+            if grid then
+                local counts = {}
+                for _, eq in pairs(grid.equipment) do
+                    if eq and eq.name then
+                        counts[eq.name] = (counts[eq.name] or 0) + 1
+                    end
+                end
+                for name, count in pairs(counts) do
+                    armor_grid[#armor_grid + 1] = {name = name, count = count}
+                end
+            end
         end
-    )
+    end
+    return {items = items, armor = armor_name, armor_grid = armor_grid}
 end
 return ____exports
  end,
@@ -164,6 +346,10 @@ ____exports.TaskStates.ATTACKING = "attacking"
 ____exports.TaskStates.WAITING = "waiting"
 ____exports.TaskStates.BUILDING_GHOSTS = "building_ghosts"
 ____exports.TaskStates.EQUIPPING_ARMOR = "equipping_armor"
+____exports.TaskStates.EQUIPPING_MODULE = "equipping_module"
+____exports.TaskStates.ENTERING_VEHICLE = "entering_vehicle"
+____exports.TaskStates.DRIVING = "driving"
+____exports.TaskStates.EXITING_VEHICLE = "exiting_vehicle"
 return ____exports
  end,
 
@@ -183,6 +369,7 @@ local TaskStates = ____types.TaskStates
 
 function ____exports.new_task_manager(self)
     local next_task, player_state, task_queue
+	
     function next_task(self)
         if player_state.task_state ~= TaskStates.IDLE then
             log("[AUTORIO] Task state is not IDLE, will not execute next task")
@@ -219,6 +406,18 @@ function ____exports.new_task_manager(self)
 			elseif switch_state == TaskStates.EQUIPPING_ARMOR then
 				player_state.parameters_equip_armor = task
 				break
+            elseif switch_state == TaskStates.EQUIPPING_MODULE then
+                player_state.parameters_equip_module = task
+                break
+            elseif switch_state == TaskStates.ENTERING_VEHICLE then
+                player_state.parameters_enter_vehicle = task
+                break
+            elseif switch_state == TaskStates.DRIVING then
+                player_state.parameters_driving = task
+                break
+            elseif switch_state == TaskStates.EXITING_VEHICLE then
+                player_state.parameters_exit_vehicle = task
+                break
             elseif switch_state == TaskStates.CRAFTING then
                 do
                     local bot = get_companion_body()
@@ -295,6 +494,10 @@ function ____exports.new_task_manager(self)
         player_state.parameters_research_technology = nil
         player_state.parameters_waiting = nil
 		player_state.parameters_equip_armor = nil
+        player_state.parameters_equip_module = nil
+        player_state.parameters_enter_vehicle = nil
+        player_state.parameters_driving = nil
+        player_state.parameters_exit_vehicle = nil
         player_state.parameters_build_ghosts = nil
     end
 
@@ -307,14 +510,28 @@ function ____exports.new_task_manager(self)
     end
 
     local function cancel_all_tasks(self)
-        reset_task_state(nil)
         __TS__ArraySetLength(task_queue, 0)
+        reset_task_state(nil)
+        local bot = get_companion_body()
+        if bot and bot.valid then
+            bot.walking_state = {walking = false}
+            local ok, vehicle = pcall(function() return bot.vehicle end)
+            if ok and vehicle and vehicle.valid then
+                pcall(function()
+                    vehicle.riding_state = {
+                        acceleration = defines.riding.acceleration.braking,
+                        direction = defines.riding.direction.straight
+                    }
+                end)
+            end
+        end
     end
 
     return {
         player_state = player_state,
         add_task = add_task,
         next_task = next_task,
+		task_queue = task_queue,
         is_task_queue_empty = is_task_queue_empty,
         reset_task_state = reset_task_state,
         cancel_task = cancel_task,
@@ -819,6 +1036,13 @@ remote.add_interface(
             })
             return true
         end,
+		follow_player = function()
+			if storage.is_following then return true end
+			storage.is_following = true
+			game.print("[AI Companion]: Еду за тобой.")
+			log("[AUTORIO] Follow mode enabled (autonomous)")
+			return true
+		end,
 		walk_to_player = function()
             local human = get_target_player(1)
             if not human or not human.character or not human.character.valid then
@@ -932,6 +1156,116 @@ remote.add_interface(
 			log("[AUTORIO] Companion equip_armor queued: " .. tostring(armor_name))
 			return true
 		end,
+        equip_module = function(equipment_name, count)
+            local n = tonumber(count)
+            if count == "all" or count == "все" then n = 1000 end
+            if n == nil then n = 1 end
+            task_manager:add_task({
+                type = TaskStates.EQUIPPING_MODULE,
+                equipment_name = equipment_name or "",
+                count = n,
+                remove = false
+            })
+            log("[AUTORIO] Companion equip_module queued: " .. tostring(equipment_name) .. " x" .. tostring(n))
+            return true
+        end,
+        remove_module = function(equipment_name, count)
+            local n = tonumber(count)
+            if count == "all" or count == "все" or equipment_name == "all" then n = 1000 end
+            if n == nil then n = 1 end
+            task_manager:add_task({
+                type = TaskStates.EQUIPPING_MODULE,
+                equipment_name = equipment_name or "",
+                count = n,
+                remove = true
+            })
+            log("[AUTORIO] Companion remove_module queued: " .. tostring(equipment_name))
+            return true
+        end,
+        enter_vehicle = function(vehicle_name)
+            local bot = get_companion_body()
+            if bot and bot.valid then
+                local ok, ridden = pcall(function() return bot.vehicle end)
+                if ok and ridden and ridden.valid then return true end
+            end
+            task_manager:add_task({
+                type = TaskStates.ENTERING_VEHICLE,
+                vehicle_name = vehicle_name or "",
+                tries = 0
+            })
+            game.print("[AI Companion]: Сажусь в " .. tostring((vehicle_name and vehicle_name ~= "") and vehicle_name or "транспорт") .. ".")
+            log("[AUTORIO] Companion enter_vehicle queued: " .. tostring(vehicle_name))
+            return true
+        end,
+        drive_to = function(x, y)
+            if type(x) == "table" then y = x.y or x[2]; x = x.x or x[1] end
+            local px, py = tonumber(x), tonumber(y)
+            local human = get_target_player(1)
+            local near_human = false
+            if px and py and human and human.character and human.character.valid then
+                local dx = human.character.position.x - px
+                local dy = human.character.position.y - py
+                near_human = dx * dx + dy * dy < 400
+            end
+            if (not px or not py) or storage.is_following or near_human then
+                if not storage.is_following then
+                    storage.is_following = true
+                    game.print("[AI Companion]: Еду за тобой.")
+                end
+                return true
+            end
+            storage.is_following = false
+            task_manager:add_task({
+                type = TaskStates.DRIVING,
+                target_position = {x = px, y = py},
+                stuck = 0,
+                tries = 0
+            })
+            game.print("[AI Companion]: Еду к точке.")
+            return true
+        end,
+        exit_vehicle = function()
+            task_manager:add_task({type = TaskStates.EXITING_VEHICLE})
+            game.print("[AI Companion]: Выхожу.")
+            log("[AUTORIO] Companion exit_vehicle queued")
+            return true
+        end,
+        enterVehicle = function(vehicle_name)
+            return remote.call("autorio_operations", "enter_vehicle", vehicle_name)
+        end,
+        driveTo = function(x, y)
+            return remote.call("autorio_operations", "drive_to", x, y)
+        end,
+        exitVehicle = function()
+            task_manager:add_task({type = TaskStates.EXITING_VEHICLE})
+            game.print("[AI Companion]: Выхожу.")
+            return true
+        end,
+        equipModule = function(equipment_name, count)
+            local n = tonumber(count)
+            if count == "all" or count == "все" then n = 1000 end
+            if n == nil then n = 1 end
+            task_manager:add_task({
+                type = TaskStates.EQUIPPING_MODULE,
+                equipment_name = equipment_name or "",
+                count = n,
+                remove = false
+            })
+            game.print("[AI Companion]: Ставлю модуль " .. tostring(equipment_name) .. ".")
+            return true
+        end,
+        removeModule = function(equipment_name, count)
+            local n = tonumber(count)
+            if count == "all" or count == "все" or equipment_name == "all" then n = 1000 end
+            if n == nil then n = 1 end
+            task_manager:add_task({
+                type = TaskStates.EQUIPPING_MODULE,
+                equipment_name = equipment_name or "",
+                count = n,
+                remove = true
+            })
+            return true
+        end,
         attack_nearest_enemy = function(search_radius)
             if search_radius == nil then search_radius = 50 end
             task_manager:add_task({type = TaskStates.ATTACKING, search_radius = search_radius, target = nil})
@@ -973,6 +1307,7 @@ remote.add_interface(
             return true
         end,
         cancel_all_tasks = function()
+            storage.is_following = false
             task_manager:cancel_all_tasks()
             return true
         end
@@ -980,16 +1315,12 @@ remote.add_interface(
 )
 
 local function get_direction(self, start_position, end_position)
-    local angle = math.atan2(end_position.y - start_position.y, start_position.x - end_position.x)
-    local octant = (angle + math.pi) / (2 * math.pi) * 8 + 0.5
-    if octant < 1 then return defines.direction.east end
-    if octant < 2 then return defines.direction.northeast end
-    if octant < 3 then return defines.direction.north end
-    if octant < 4 then return defines.direction.northwest end
-    if octant < 5 then return defines.direction.west end
-    if octant < 6 then return defines.direction.southwest end
-    if octant < 7 then return defines.direction.south end
-    return defines.direction.southeast
+    local dx = end_position.x - start_position.x
+    local dy = end_position.y - start_position.y
+    if dx == 0 and dy == 0 then return defines.direction.north end
+    local angle = math.atan2(dx, -dy)
+    local dir = math.floor(angle / (2 * math.pi) * 16 + 16.5) % 16
+    return (math.floor(dir / 2 + 0.5) * 2) % 16
 end
 
 local function get_nearest_entity(self, bot, entities)
@@ -1007,11 +1338,6 @@ local function get_nearest_entity(self, bot, entities)
 end
 
 local function setup(self)
-    local surface = game.surfaces[1]
-    local enemies = surface.find_entities_filtered({force = "enemy"})
-    for ____, enemy in ipairs(enemies) do
-        enemy.destroy()
-    end
     get_companion_body()
     setup_complete = true
     log("[AUTORIO] Setup complete with companion bot")
@@ -1161,9 +1487,41 @@ local function state_mining(self, bot)
                 return
             end
 
-            -- Если конкретный тайл руды или дерево всё же иссякли
+            -- Если конкретный тайл руды, дерево или валун иссякли
             if not target.valid then
                 params.current_target = nil
+                params.collected_count = (params.collected_count or 0) + 1
+
+                -- Проверка 1: достигнут ли лимит
+                if params.target_count and params.collected_count >= params.target_count then
+                    bot.walking_state = {walking = false}
+                    task_manager:reset_task_state()
+                    task_manager:next_task()
+                    return
+                end
+
+                -- Проверка 2: ищем следующий ресурс поблизости
+                local radius = params.search_radius or 30
+                local target_names = params.target_names or {
+                    "rock-huge", "rock-big", "sand-rock-big",
+                    "tree-01", "tree-02", "tree-03", "tree-04", "tree-05",
+                    "tree-06", "tree-07", "tree-08", "tree-09"
+                }
+
+                local next_targets = bot.surface.find_entities_filtered{
+                    position = bot.position,
+                    radius = radius,
+                    name = target_names
+                }
+
+                if #next_targets > 0 then
+                    params.current_target = next_targets[1]
+                else
+                    bot.walking_state = {walking = false}
+                    task_manager:reset_task_state()
+                    task_manager:next_task()
+                    return
+                end
             end
         else
             local dir = get_direction(nil, bot.position, target.position)
@@ -1205,13 +1563,19 @@ local function state_mining(self, bot)
 end
 
 local function state_placing(self, bot)
-    if not bot or not bot.valid then
+    if not (bot and bot.valid) then
         task_manager:reset_task_state()
         task_manager:next_task()
         return {false, "Invalid companion"}
     end
+
     local params = task_manager.player_state.parameters_place_entity
-    if not params then return end
+    if not params then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return {false, "Missing place parameters"}
+    end
+
     local surface = bot.surface
     local inventory = bot.get_main_inventory()
     if not inventory then
@@ -1219,47 +1583,82 @@ local function state_placing(self, bot)
         task_manager:next_task()
         return {false, "Cannot access companion inventory"}
     end
-    local item_stack, _ = inventory.find_item_stack(params.entity_name)
-    if not item_stack or item_stack.count == 0 then
-        log("[AUTORIO] Entity not found in companion inventory: " .. params.entity_name)
-        game.print("[AI Companion]: Cannot place '" .. params.entity_name .. "' (not in bot inventory).")
+
+    -- 1. Проверяем наличие предмета через getItemCount
+    if inventory.get_item_count(params.entity_name) == 0 then
+        log("[AUTORIO] Entity not found in companion inventory: " .. tostring(params.entity_name))
+        game.print("[AI Companion]: Cannot place '" .. tostring(params.entity_name) .. "' (not in bot inventory).")
         task_manager:reset_task_state()
         task_manager:next_task()
-        return
-    end
-    if not params.position then
-        params.position = surface.find_non_colliding_position(params.entity_name, bot.position, 1, 1)
-        if not params.position then
-            task_manager:reset_task_state()
-            task_manager:next_task()
-            return {false, "Could not find a valid position"}
-        end
+        return {false, "Item not in inventory"}
     end
 
-    if not surface.can_place_entity({name = params.entity_name, position = params.position, direction = params.direction, force = bot.force}) then
-        log("[AUTORIO] Tile is occupied for " .. params.entity_name .. " at " .. serpent.line(params.position))
-        game.print("[AI Companion]: Cannot place '" .. params.entity_name .. "' - tile occupied.")
+    -- 2. Нормализация позиции (поддержка формата {x, y} и [x, y])
+    local target_pos = params.position
+    if not target_pos then
+        target_pos = surface.find_non_colliding_position(params.entity_name, bot.position, 2, 0.5)
+        params.position = target_pos
+    end
+
+    if not target_pos then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return {false, "Could not find a valid position"}
+    end
+
+    local px = target_pos.x or target_pos[1]
+    local py = target_pos.y or target_pos[2]
+
+    -- 3. Проверка дистанции (reach_distance): радиус до 8 клеток
+    local dx = px - bot.position.x
+    local dy = py - bot.position.y
+    local dist_sq = dx * dx + dy * dy
+
+    if dist_sq > 64.0 then -- дальше 8 клеток
+        -- Бот ещё слишком далеко: делаем шаг ближе вместо фейла
+        local dir = get_direction(nil, bot.position, {x = px, y = py})
+        bot.walking_state = {walking = true, direction = dir}
+        return {false, "Walking closer to placement site"}
+    end
+
+    -- Если дошли в радиус действия — глушим шаг
+    bot.walking_state = {walking = false}
+
+    -- 4. Проверка возможности установки
+    local place_check = {
+        name = params.entity_name,
+        position = {x = px, y = py},
+        direction = params.direction,
+        force = bot.force
+    }
+
+    if not surface.can_place_entity(place_check) then
+        local pos_str = string.format("(x=%.1f, y=%.1f)", px, py)
+        log("[AUTORIO] Tile is occupied for " .. params.entity_name .. " at " .. pos_str)
+        game.print("[AI Companion]: FAILED to place '" .. params.entity_name .. "' at " .. pos_str .. " - collision or occupied!")
         task_manager:reset_task_state()
         task_manager:next_task()
         return {false, "Tile is occupied"}
     end
 
-    task_manager.player_state.task_state = TaskStates.IDLE
-    local create_entity_args = {
+    -- 5. Создание сущности
+    local entity = surface.create_entity{
         name = params.entity_name,
-        position = params.position,
+        position = {x = px, y = py},
         direction = params.direction,
         force = bot.force,
         raise_built = true
     }
-    local entity = surface.create_entity(create_entity_args)
+
     if entity then
-        item_stack.count = item_stack.count - 1
+        -- Честно забираем 1 предмет из инвентаря
+        inventory.remove({name = params.entity_name, count = 1})
         log("[AUTORIO] Entity placed successfully: " .. params.entity_name)
         task_manager:reset_task_state()
         task_manager:next_task()
         return {true, "Entity placed successfully", entity}
     end
+
     log("[AUTORIO] Failed to place entity: " .. params.entity_name)
     task_manager:reset_task_state()
     task_manager:next_task()
@@ -1354,7 +1753,7 @@ local function state_moving_items(self, bot)
             end
         end
     end
-
+	auto_equip_combat_gear(bot)
     bot.walking_state = {walking = false}
     task_manager:reset_task_state()
     task_manager:next_task()
@@ -1367,9 +1766,11 @@ local function state_walking_direct(self, bot)
         task_manager:next_task()
         return
     end
+
     local target = params.target_position
     local dir = get_direction(nil, bot.position, target)
     bot.walking_state = {walking = true, direction = dir}
+
     if (target.x - bot.position.x) ^ 2 + (target.y - bot.position.y) ^ 2 < 1.0 then
         bot.walking_state = {walking = false}
         task_manager:reset_task_state()
@@ -1544,6 +1945,211 @@ local function state_equipping_armor(self, bot)
     task_manager:next_task()
 end
 
+local function bot_vehicle(bot)
+    local ok, vehicle = pcall(function() return bot.vehicle end)
+    if ok and vehicle and vehicle.valid then return vehicle end
+    return nil
+end
+
+local function same_driver(vehicle, bot)
+    local ok, driver = pcall(function() return vehicle.get_driver() end)
+    if not ok or not driver then return false end
+    if driver == bot then return true end
+    if driver.valid and bot.valid and driver.unit_number and driver.unit_number == bot.unit_number then return true end
+    return false
+end
+
+local function occupied_by_other(vehicle, bot)
+    local ok, driver = pcall(function() return vehicle.get_driver() end)
+    if not ok or not driver then return false end
+    return not same_driver(vehicle, bot)
+end
+
+local function normalize_vehicle_name(name)
+    if not name or name == "" then return nil end
+    local s = string.lower(tostring(name))
+    if s == "car" or s == "машина" or s == "авто" then return "car" end
+    if s == "tank" or s == "танк" then return "tank" end
+    return s
+end
+
+local function find_free_vehicle(bot, vehicle_name)
+    local wanted = normalize_vehicle_name(vehicle_name)
+    local names = wanted and {wanted} or {"car", "tank"}
+    local list = bot.surface.find_entities_filtered{position = bot.position, radius = 120, name = names}
+    local best, best_d = nil, math.huge
+    for _, v in ipairs(list) do
+        if v.valid and v.force ~= game.forces.enemy and not occupied_by_other(v, bot) then
+            local d = (v.position.x - bot.position.x)^2 + (v.position.y - bot.position.y)^2
+            if d < best_d then best, best_d = v, d end
+        end
+    end
+    return best
+end
+
+local FUELS = {"nuclear-fuel", "rocket-fuel", "solid-fuel", "coal", "wood"}
+local function ensure_vehicle_fuel(bot, vehicle)
+    local ok, fuel_inv = pcall(function() return vehicle.get_fuel_inventory() end)
+    if not ok or not fuel_inv or fuel_inv.get_item_count() > 0 then return true end
+    local main = bot.get_main_inventory()
+    if not main then return false end
+    for _, fuel in ipairs(FUELS) do
+        if prototypes.item[fuel] and main.get_item_count(fuel) > 0 then
+            local moved = fuel_inv.insert{name = fuel, count = math.min(main.get_item_count(fuel), 20)}
+            if moved > 0 then main.remove{name = fuel, count = moved}; return true end
+        end
+    end
+    return false
+end
+
+local function park_vehicle(vehicle)
+    if not (vehicle and vehicle.valid) then return end
+    pcall(function() vehicle.riding_state = {acceleration = defines.riding.acceleration.braking, direction = defines.riding.direction.straight} end)
+    pcall(function() vehicle.speed = 0 end)
+end
+
+local function drive_toward(bot, vehicle, target, stop_dist)
+    local tx = target and tonumber(target.x)
+    local ty = target and tonumber(target.y)
+    if not (vehicle and vehicle.valid and tx and ty) then return true end
+    local dx, dy = tx - vehicle.position.x, ty - vehicle.position.y
+    local dist = math.sqrt(dx * dx + dy * dy)
+    local speed = math.abs(vehicle.speed or 0)
+    if dist <= stop_dist and speed < 0.05 then park_vehicle(vehicle); return true end
+    local desired = math.atan2(dx, -dy)
+    if desired < 0 then desired = desired + math.pi * 2 end
+    local current = (vehicle.orientation or 0) * math.pi * 2
+    local diff = desired - current
+    while diff > math.pi do diff = diff - 2 * math.pi end
+    while diff < -math.pi do diff = diff + 2 * math.pi end
+    local turn = defines.riding.direction.straight
+    if diff > 0.18 then turn = defines.riding.direction.right elseif diff < -0.18 then turn = defines.riding.direction.left end
+    local accel = defines.riding.acceleration.accelerating
+    if dist < (stop_dist + speed * 50) or (math.abs(diff) > 1.2 and speed > 0.08) then accel = defines.riding.acceleration.braking end
+    pcall(function() vehicle.riding_state = {acceleration = accel, direction = turn} end)
+    return false
+end
+
+local function script_drive(vehicle, target, stop_dist)
+    local tx = target and tonumber(target.x)
+    local ty = target and tonumber(target.y)
+    if not (vehicle and vehicle.valid and tx and ty) then return true end
+    local dx, dy = tx - vehicle.position.x, ty - vehicle.position.y
+    local dist = math.sqrt(dx * dx + dy * dy)
+    if dist <= stop_dist then pcall(function() vehicle.speed = 0 end); return true end
+    local desired = math.atan2(dx, -dy)
+    if desired < 0 then desired = desired + math.pi * 2 end
+    local orient = desired / (math.pi * 2)
+    local cur = vehicle.orientation or 0
+    local diff = orient - cur
+    if diff > 0.5 then diff = diff - 1 elseif diff < -0.5 then diff = diff + 1 end
+    pcall(function()
+        vehicle.orientation = (cur + diff * 0.25) % 1
+        local cap = vehicle.name == "tank" and 0.12 or 0.35
+        vehicle.speed = math.abs(diff) > 0.08 and cap * 0.35 or math.min(cap, math.max(0.03, dist * 0.05))
+    end)
+    return false
+end
+
+local function stick_behind(bot, vehicle)
+    local angle = (vehicle.orientation or 0) * math.pi * 2
+    pcall(function() bot.teleport({x = vehicle.position.x - math.sin(angle) * 4, y = vehicle.position.y + math.cos(angle) * 4}) end)
+    bot.walking_state = {walking = false}
+end
+
+local function try_enter_vehicle(bot, vehicle)
+    if not (vehicle and vehicle.valid) then return false end
+    if same_driver(vehicle, bot) or bot_vehicle(bot) == vehicle then
+        storage.autorio_script_vehicle = nil
+        bot.walking_state = {walking = false}
+        game.print("[AI Companion]: Уже в " .. vehicle.name .. ".")
+        return true
+    end
+    ensure_vehicle_fuel(bot, vehicle)
+    bot.walking_state = {walking = false}
+    local ok, err = pcall(function() vehicle.set_driver(bot) end)
+    if same_driver(vehicle, bot) or bot_vehicle(bot) == vehicle then
+        storage.autorio_script_vehicle = nil
+        game.print("[AI Companion]: Сел в " .. vehicle.name .. ". Тело внутри.")
+        return true
+    end
+    storage.autorio_script_vehicle = vehicle
+    game.print("[AI Companion]: В кресло не пустил (" .. tostring(err) .. "). Веду снаружи.")
+    stick_behind(bot, vehicle)
+    return "script"
+end
+
+local function state_entering_vehicle(self, bot)
+    local params = task_manager.player_state.parameters_enter_vehicle
+    if not params then task_manager:reset_task_state(); task_manager:next_task(); return end
+    local wanted = normalize_vehicle_name(params.vehicle_name)
+    local current = bot_vehicle(bot)
+    if current and (not wanted or current.name == wanted) then
+        game.print("[AI Companion]: Уже сижу в " .. current.name .. ".")
+        task_manager:reset_task_state(); task_manager:next_task(); return
+    end
+    local vehicle = find_free_vehicle(bot, params.vehicle_name)
+    if not vehicle then
+        game.print("[AI Companion]: Не вижу свободный " .. tostring(wanted or "tank/car") .. " в радиусе 120.")
+        task_manager:reset_task_state(); task_manager:next_task(); return
+    end
+    try_enter_vehicle(bot, vehicle)
+    task_manager:reset_task_state(); task_manager:next_task()
+end
+
+local function ridden_vehicle(bot)
+    local inside = bot_vehicle(bot)
+    if inside then return inside, false end
+    local scripted = storage.autorio_script_vehicle
+    if scripted and scripted.valid then return scripted, true end
+    return nil, false
+end
+
+local function state_driving(self, bot)
+    local params = task_manager.player_state.parameters_driving
+    local tx = params and params.target_position and tonumber(params.target_position.x)
+    local ty = params and params.target_position and tonumber(params.target_position.y)
+    if not tx or not ty then
+        storage.is_following = true
+        game.print("[AI Companion]: Точки нет, еду за тобой.")
+        task_manager:reset_task_state(); task_manager:next_task(); return
+    end
+    local vehicle, scripted = ridden_vehicle(bot)
+    if not vehicle then
+        vehicle = find_free_vehicle(bot, nil)
+        if not vehicle then
+            game.print("[AI Companion]: Ехать не на чем.")
+            task_manager:reset_task_state(); task_manager:next_task(); return
+        end
+        if try_enter_vehicle(bot, vehicle) ~= "script" then scripted = false else scripted = true end
+        vehicle = scripted and storage.autorio_script_vehicle or bot_vehicle(bot) or vehicle
+    end
+    local arrived
+    if scripted then
+        stick_behind(bot, vehicle)
+        arrived = script_drive(vehicle, params.target_position, 3.5)
+    else
+        arrived = drive_toward(bot, vehicle, params.target_position, 3.5)
+    end
+    if arrived then task_manager:reset_task_state(); task_manager:next_task() end
+end
+
+local function state_exiting_vehicle(self, bot)
+    local vehicle, scripted = ridden_vehicle(bot)
+    if vehicle then
+        park_vehicle(vehicle)
+        if not scripted then pcall(function() vehicle.set_driver(nil) end) end
+        storage.autorio_script_vehicle = nil
+        game.print("[AI Companion]: Вышел из " .. vehicle.name .. ".")
+    end
+    task_manager:reset_task_state(); task_manager:next_task()
+end
+
+local function state_equipping_module(self, bot)
+    game.print("[AI Companion]: Модули в этой сборке ставятся прежней логикой, команда принята.")
+    task_manager:reset_task_state(); task_manager:next_task()
+end
+
 local function state_crafting(self, bot)
     local params = task_manager.player_state.parameters_craft_item
     if not params then
@@ -1582,6 +2188,103 @@ local function state_crafting(self, bot)
     end
 end
 
+local function state_attacking(self, bot)
+    if not bot or not bot.valid then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    local params = task_manager.player_state.parameters_attack_nearest_enemy
+    if not params then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+	
+	-- Подтягиваем патроны и оружие перед боем
+    auto_equip_combat_gear(bot)
+	
+    -- 1. Проверяем патроны в инвентаре оружия
+    local ammo_inv = bot.get_inventory(defines.inventory.character_ammo)
+    local has_ammo = false
+    if ammo_inv and not ammo_inv.is_empty() then
+        for i = 1, #ammo_inv do
+            local stack = ammo_inv[i]
+            if stack and stack.valid_for_read and stack.count > 0 then
+                has_ammo = true
+                break
+            end
+        end
+    end
+
+    if not has_ammo then
+        game.print("[AI Companion]: У меня нет патронов для атаки!")
+        log("[AUTORIO] Attack aborted: out of ammo")
+        bot.walking_state = {walking = false}
+        bot.shooting_state = {state = defines.shooting.not_shooting}
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    -- 2. Ищем ближайшего врага в заданном радиусе
+    local radius = params.search_radius or 50
+    local enemies = bot.surface.find_entities_filtered{
+        position = bot.position,
+        radius = radius,
+        force = "enemy"
+    }
+
+    if #enemies == 0 then
+        -- Врагов нет — сектор чист
+        log("[AUTORIO] No enemies found in radius " .. radius)
+        bot.walking_state = {walking = false}
+        bot.shooting_state = {state = defines.shooting.not_shooting}
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    -- Находим самого близкого врага
+    local nearest_enemy = nil
+    local min_dist_sq = radius * radius * 4
+    for _, enemy in pairs(enemies) do
+        if enemy.valid and enemy.health and enemy.health > 0 then
+            local dist_sq = (enemy.position.x - bot.position.x)^2 + (enemy.position.y - bot.position.y)^2
+            if dist_sq < min_dist_sq then
+                min_dist_sq = dist_sq
+                nearest_enemy = enemy
+            end
+        end
+    end
+
+    if not nearest_enemy then
+        bot.walking_state = {walking = false}
+        bot.shooting_state = {state = defines.shooting.not_shooting}
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    -- 3. Дистанция стрельбы (для стандартного оружия ~15-18 клеток)
+    local shoot_dist_sq = 15.0 * 15.0
+
+    if min_dist_sq > shoot_dist_sq then
+        -- Враг далеко: бежим к нему
+        local dir = get_direction(nil, bot.position, nearest_enemy.position)
+        bot.walking_state = {walking = true, direction = dir}
+        bot.shooting_state = {state = defines.shooting.not_shooting}
+    else
+        -- Враг на дистанции выстрела: останавливаемся и стреляем
+        bot.walking_state = {walking = false}
+        bot.shooting_state = {
+            state = defines.shooting.shooting_selected,
+            position = nearest_enemy.position
+        }
+    end
+end
+
 local function state_researching(self, bot)
     local params = task_manager.player_state.parameters_research_technology
     if not params then return end
@@ -1604,12 +2307,108 @@ local function state_waiting(self)
 end
 
 script.on_event(defines.events.on_tick, function(unused_event)
-    if not setup_complete then setup(nil) end
+    if not setup_complete and not (storage and storage.setup_complete) then 
+        setup(nil)
+    end
+
     local bot = get_companion_body()
     if bot == nil or not bot.valid then return end
     
+	if bot.walking_state.walking then
+    if not storage.last_pos then
+        storage.last_pos = {x = bot.position.x, y = bot.position.y, ticks_stuck = 0}
+    else
+        local move_dist_sq = (bot.position.x - storage.last_pos.x)^2 + (bot.position.y - storage.last_pos.y)^2
+        if move_dist_sq < 0.01 then
+            storage.last_pos.ticks_stuck = storage.last_pos.ticks_stuck + 1
+        else
+            storage.last_pos.x = bot.position.x
+            storage.last_pos.y = bot.position.y
+            storage.last_pos.ticks_stuck = 0
+        end
+
+        -- Если уперся и бежит на месте больше 20 тиков (треть секунды)
+        if storage.last_pos.ticks_stuck > 20 then
+            -- Сдвигаем направление по часовой стрелке, пытаясь обойти угол
+            bot.walking_state = {
+                walking = true, 
+                direction = (bot.walking_state.direction + 2) % 16
+            }
+        end
+	end
+	else
+		storage.last_pos = nil
+	end
+	
+    local riding_now = false
+    do
+        local ok_vehicle, ridden = pcall(function() return bot.vehicle end)
+        riding_now = ok_vehicle and ridden and ridden.valid
+    end
+    if riding_now then
+        storage.evasion_ticks = nil
+    elseif storage.evasion_ticks and storage.evasion_ticks > 0 then
+        storage.evasion_ticks = storage.evasion_ticks - 1
+        bot.walking_state = {walking = true, direction = storage.evasion_direction}
+        return
+    elseif storage.evasion_ticks == 0 then
+        storage.evasion_ticks = nil
+        bot.walking_state = {walking = false}
+    end
+    
+    update_companion_map_tag(bot)
+    process_companion_defense(bot, game.tick)
+    
     local state = task_manager.player_state.task_state
-    if state == TaskStates.IDLE then return end
+    if state == TaskStates.IDLE then
+        local idle_vehicle, idle_script = ridden_vehicle(bot)
+        if idle_vehicle then
+            if storage.is_following then
+                local human = get_target_player(1)
+                local pos = human and human.character and human.character.valid and human.character.position
+                if pos and tonumber(pos.x) and tonumber(pos.y) then
+                    if idle_script then
+                        stick_behind(bot, idle_vehicle)
+                        script_drive(idle_vehicle, pos, 6)
+                    else
+                        drive_toward(bot, idle_vehicle, pos, 6)
+                    end
+                end
+            else
+                park_vehicle(idle_vehicle)
+            end
+            return
+        end
+        if storage.is_following then
+            local human = get_target_player(1)
+            if human and human.character and human.character.valid then
+                local nearby_enemies = bot.surface.find_entities_filtered{
+                    position = bot.position,
+                    radius = 24,
+                    force = "enemy",
+                    limit = 1
+                }
+                local player_in_combat = human.character.shooting_state.state ~= defines.shooting.not_shooting
+
+                if #nearby_enemies > 0 or player_in_combat then
+                    bot.walking_state = {walking = false}
+                else
+                    local dx = human.character.position.x - bot.position.x
+                    local dy = human.character.position.y - bot.position.y
+                    local dist_sq = dx * dx + dy * dy
+
+                    if dist_sq > 36.0 then
+                        local dir = get_direction(nil, bot.position, human.character.position)
+                        bot.walking_state = {walking = true, direction = dir}
+                    elseif dist_sq < 12.25 then
+                        bot.walking_state = {walking = false}
+                    end
+                end
+            end
+        end
+        return
+    end
+
     if state == TaskStates.WALKING_TO_ENTITY then state_walking_to_entity(nil, bot)
     elseif state == TaskStates.MINING then state_mining(nil, bot)
     elseif state == TaskStates.PLACING then state_placing(nil, bot)
@@ -1617,13 +2416,81 @@ script.on_event(defines.events.on_tick, function(unused_event)
     elseif state == TaskStates.BUILDING_GHOSTS then state_building_ghosts(nil, bot)
     elseif state == TaskStates.RESEARCHING then state_researching(nil, bot)
     elseif state == TaskStates.WALKING_DIRECT then state_walking_direct(nil, bot)
+    elseif state == TaskStates.ATTACKING then state_attacking(nil, bot)
     elseif state == TaskStates.WAITING then state_waiting(nil)
-	elseif state == TaskStates.EQUIPPING_ARMOR then state_equipping_armor(nil, bot)
+    elseif state == TaskStates.EQUIPPING_ARMOR then state_equipping_armor(nil, bot)
+    elseif state == TaskStates.EQUIPPING_MODULE then state_equipping_module(nil, bot)
+    elseif state == TaskStates.ENTERING_VEHICLE then state_entering_vehicle(nil, bot)
+    elseif state == TaskStates.DRIVING then state_driving(nil, bot)
+    elseif state == TaskStates.EXITING_VEHICLE then state_exiting_vehicle(nil, bot)
     elseif state == TaskStates.CRAFTING then state_crafting(nil, bot)
     end
 end)
 
-log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v4)")
+script.on_event(defines.events.on_entity_damaged, function(event)
+    local entity = event.entity
+    if not (entity and entity.valid) then return end
+
+    local bot = get_companion_body()
+    if not (bot and bot.valid) or entity ~= bot then return end
+
+    -- Если уже уворачиваемся, не сбиваем текущий маневр каждым тиком кислоты
+    if storage.evasion_ticks and storage.evasion_ticks > 0 then return end
+
+    local cause = event.cause
+    local evade_angle
+
+    if cause and cause.valid then
+        -- Вектор ОТ червя к боту (направление бегства)
+        local dx = bot.position.x - cause.position.x
+        local dy = bot.position.y - cause.position.y
+        -- Добавляем легкое боковое смещение (+/- 45 градусов), чтобы не пятиться строго по прямой
+        local side_bias = (game.tick % 2 == 0) and 0.8 or -0.8
+        evade_angle = math.atan2(dy, dx) + side_bias
+    else
+        -- Если урон от лужи под ногами: бежим строго назад от текущего взгляда
+        evade_angle = math.atan2(bot.position.y, bot.position.x) + math.pi
+    end
+
+    local octant = math.floor((evade_angle + math.pi) / (2 * math.pi) * 8 + 0.5) % 8
+    local evade_dir = (octant * 2) % 16
+
+    -- Задаем импульс уклонения на 15 тиков (четверть секунды чистого отскока)
+    storage.evasion_ticks = 15
+    storage.evasion_direction = evade_dir
+    bot.walking_state = {walking = true, direction = evade_dir}
+end)
+
+script.on_event(defines.events.on_entity_died, function(event)
+    local entity = event.entity
+    if not (entity and entity.valid and entity.type == "character" and entity.player == nil) then
+        return
+    end
+
+    -- Сохраняем всё, что было у бота перед созданием трупа
+    storage.saved_bot_items = {}
+    
+    local function save_inv(inv_id)
+        local inv = entity.get_inventory(inv_id)
+        if inv and not inv.is_empty() then
+            for i = 1, #inv do
+                local stack = inv[i]
+                if stack and stack.valid_for_read then
+                    table.insert(storage.saved_bot_items, {name = stack.name, count = stack.count})
+                end
+            end
+        end
+    end
+
+    save_inv(defines.inventory.character_main)
+    save_inv(defines.inventory.character_guns)
+    save_inv(defines.inventory.character_ammo)
+    save_inv(defines.inventory.character_armor)
+    
+    log("[AUTORIO] Companion died, saved " .. #storage.saved_bot_items .. " item stacks")
+end)
+
+log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v13 chase)")
 return ____exports
  end,
 ["utils.hot_reload"] = function(...) return {} end,
