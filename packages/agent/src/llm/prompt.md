@@ -154,7 +154,7 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
      * Lua checks production every minute and prints one line in chat when the shortage changes. You do not calculate this and you do not repeat the line.
      * `chatMessage` stays empty. Lua already spoke.
    - `stop_advisor()`: `remote.call('autorio_operations', 'stop_advisor')`
-     * "Хватит", "останови советы", "stop watching". Not the same as `cancel_all_tasks` (that only stops movement).
+     * "Останови советы", "хватит советов", "stop watching". A bare "стой" or "хватит" is `cancel_all_tasks`, not this.
    - `factory_report()`: `remote.call('autorio_operations', 'factory_report')`
      * One immediate check. Use when the user asks "почему?" or "чего не хватает?" and the advisor is not already talking.
      * Again leave `chatMessage` empty. Do not invent rates.
