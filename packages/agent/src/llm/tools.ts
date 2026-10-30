@@ -163,4 +163,37 @@ export const tools: ToolFunction[] = [
       return response.data?.output || 'true'
     },
   },
+  {
+    name: 'startAdvisor',
+    description: 'Start the factory advisor. Lua counts shortages and prints them in chat. The model does not calculate rates.',
+    schema: z.object({}),
+    fn: async () => {
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_operations", "start_advisor")' },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'stopAdvisor',
+    description: 'Stop the factory advisor. Does not stop movement.',
+    schema: z.object({}),
+    fn: async () => {
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_operations", "stop_advisor")' },
+      })
+      return response.data?.output || 'true'
+    },
+  },
+  {
+    name: 'factoryReport',
+    description: 'Run one factory check now. Lua prints the shortage line and returns the report. Do not invent production numbers.',
+    schema: z.object({}),
+    fn: async () => {
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: '/sc remote.call("autorio_operations", "factory_report")' },
+      })
+      return response.data?.output || '{}'
+    },
+  },
 ]

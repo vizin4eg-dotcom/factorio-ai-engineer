@@ -1266,6 +1266,40 @@ remote.add_interface(
             })
             return true
         end,
+
+        start_advisor = function()
+            storage.advisor_enabled = true
+            storage.advisor_last_signature = nil
+            storage.advisor_next_tick = game.tick
+            game.print("[AI Companion]: Слежу за базой.")
+            log("[AUTORIO] Factory advisor started")
+            return true
+        end,
+        stop_advisor = function()
+            storage.advisor_enabled = false
+            storage.advisor_last_signature = nil
+            game.print("[AI Companion]: Больше не слежу за производством.")
+            log("[AUTORIO] Factory advisor stopped")
+            return true
+        end,
+        startAdvisor = function()
+            return remote.call("autorio_operations", "start_advisor")
+        end,
+        stopAdvisor = function()
+            return remote.call("autorio_operations", "stop_advisor")
+        end,
+        factory_report = function()
+            local report = build_factory_report()
+            storage.advisor_last_report = report
+            if report and report.line then
+                game.print("[AI Companion]: " .. report.line)
+            end
+            pcall(function() rcon.print(helpers.table_to_json(report or {})) end)
+            return true
+        end,
+        factoryReport = function()
+            return remote.call("autorio_operations", "factory_report")
+        end,
         attack_nearest_enemy = function(search_radius)
             if search_radius == nil then search_radius = 50 end
             task_manager:add_task({type = TaskStates.ATTACKING, search_radius = search_radius, target = nil})
@@ -2306,10 +2340,202 @@ local function state_waiting(self)
     params.remaining_ticks = params.remaining_ticks - 1
 end
 
+
+local function flow_amount(stats, item_name, category, precision)
+    if not stats then return 0 end
+    local ok, value = pcall(function()
+        return stats.get_flow_count{name = item_name, category = category, precision_index = precision}
+    end)
+    if ok and type(value) == "number" then return value end
+    ok, value = pcall(function()
+        return stats.get_flow_count(item_name, category, precision)
+    end)
+    if ok and type(value) == "number" then return value end
+    return 0
+end
+
+local function status_bucket(status)
+    local s = defines.entity_status
+    if not s or status == nil then return "other" end
+    if status == s.item_ingredient_shortage or status == s.fluid_ingredient_shortage
+        or status == s.no_ingredients or status == s.missing_required_fluid or status == s.no_input_fluid then
+        return "ingredients"
+    end
+    if status == s.no_power or status == s.low_power or status == s.not_plugged_in_electric_network then
+        return "power"
+    end
+    if status == s.full_output or status == s.waiting_for_space_in_destination then
+        return "output"
+    end
+    if status == s.working or status == s.normal then
+        return "working"
+    end
+    return "other"
+end
+
+local function recipe_makes(recipe, item_name)
+    if not recipe or not recipe.products then return false end
+    for _, product in pairs(recipe.products) do
+        if product.name == item_name then return true end
+    end
+    return false
+end
+
+local function worst_power(surface, force)
+    local ok, poles = pcall(function()
+        return surface.find_entities_filtered{type = "electric-pole", force = force}
+    end)
+    if not ok or not poles then return 1 end
+    local seen = {}
+    local worst = 1
+    for _, pole in ipairs(poles) do
+        if pole.valid and pole.electric_network_id and not seen[pole.electric_network_id] then
+            seen[pole.electric_network_id] = true
+            local net = pole.electric_network_statistics
+            if net then
+                local produced, consumed = 0, 0
+                if net.output_counts then
+                    for _, val in pairs(net.output_counts) do produced = produced + (val or 0) end
+                end
+                if net.input_counts then
+                    for _, val in pairs(net.input_counts) do consumed = consumed + (val or 0) end
+                end
+                local sat = consumed > 0 and math.min(1, produced / consumed) or 1
+                if sat < worst then worst = sat end
+            end
+        end
+    end
+    return worst
+end
+
+local function machine_reason(surface, force, item_name)
+    local counts = {total = 0, ingredients = 0, power = 0, output = 0, working = 0}
+    local ok, machines = pcall(function()
+        return surface.find_entities_filtered{
+            force = force,
+            type = {"assembling-machine", "furnace", "rocket-silo"}
+        }
+    end)
+    if not ok or not machines then
+        return "Машин на этот предмет не нашёл.", counts
+    end
+    for _, machine in ipairs(machines) do
+        if machine.valid then
+            local recipe_ok, recipe = pcall(function() return machine.get_recipe() end)
+            if recipe_ok and recipe_makes(recipe, item_name) then
+                counts.total = counts.total + 1
+                local bucket = status_bucket(machine.status)
+                counts[bucket] = (counts[bucket] or 0) + 1
+            end
+        end
+    end
+    if counts.total == 0 then
+        return "Машин на этот предмет не нашёл.", counts
+    end
+    if counts.power > 0 and counts.power >= counts.ingredients and counts.power >= counts.output then
+        return "Нет энергии у " .. counts.power .. " из " .. counts.total .. ".", counts
+    end
+    if counts.ingredients > 0 and counts.ingredients >= counts.output then
+        return "Нет ингредиентов у " .. counts.ingredients .. " из " .. counts.total .. ".", counts
+    end
+    if counts.output > 0 then
+        return "Выход забит у " .. counts.output .. " из " .. counts.total .. ".", counts
+    end
+    return "Машины работают, мощности мало: " .. counts.working .. " из " .. counts.total .. ".", counts
+end
+
+function build_factory_report()
+    local player = get_target_player(1)
+    local bot = get_companion_body()
+    local ref = (bot and bot.valid and bot) or (player and player.character)
+    if not ref or not ref.valid then
+        return {enabled = storage.advisor_enabled == true, line = "Не вижу ни себя, ни тебя.", shortages = {}}
+    end
+    local force = ref.force
+    local surface = ref.surface
+    local precision = (defines.flow_precision_index and defines.flow_precision_index.ten_minutes) or 2
+    local item_stats, fluid_stats
+    pcall(function() item_stats = force.get_item_production_statistics(surface) end)
+    pcall(function() fluid_stats = force.get_fluid_production_statistics(surface) end)
+
+    local shortages = {}
+    local function consider(stats, name, kind)
+        local produced = flow_amount(stats, name, "output", precision)
+        local consumed = flow_amount(stats, name, "input", precision)
+        if consumed >= 30 and produced < consumed * 0.9 then
+            shortages[#shortages + 1] = {
+                name = name,
+                kind = kind,
+                produced_per_min = math.floor(produced / 10),
+                consumed_per_min = math.floor(consumed / 10),
+                gap_per_min = math.floor((consumed - produced) / 10)
+            }
+        end
+    end
+    if item_stats and prototypes.item then
+        for name, _ in pairs(prototypes.item) do
+            consider(item_stats, name, "item")
+        end
+    end
+    if fluid_stats and prototypes.fluid then
+        for name, _ in pairs(prototypes.fluid) do
+            consider(fluid_stats, name, "fluid")
+        end
+    end
+    table.sort(shortages, function(a, b) return a.gap_per_min > b.gap_per_min end)
+    local top = {}
+    for i = 1, math.min(5, #shortages) do top[i] = shortages[i] end
+
+    local power = worst_power(surface, force)
+    local line, signature
+    if #top == 0 then
+        line = "Расход покрывается производством."
+        if power < 0.95 then
+            line = string.format("По предметам дефицита нет. Энергия проседает до %d%%.", math.floor(power * 100))
+        end
+        signature = "ok|" .. (power < 0.95 and "power" or "fine")
+    else
+        local worst = top[1]
+        local reason = select(1, machine_reason(surface, force, worst.name))
+        if power < 0.95 then
+            reason = reason .. string.format(" Энергия %d%%.", math.floor(power * 100))
+        end
+        line = string.format("Не хватает %s: %d/мин при расходе %d/мин. %s", worst.name, worst.produced_per_min, worst.consumed_per_min, reason)
+        signature = worst.name .. "|" .. reason .. "|" .. tostring(math.floor(worst.consumed_per_min / 10))
+    end
+    return {
+        enabled = storage.advisor_enabled == true,
+        tick = game.tick,
+        power_satisfaction = math.floor(power * 100) / 100,
+        shortages = top,
+        line = line,
+        signature = signature
+    }
+end
+
+local function run_factory_advisor()
+    if not storage.advisor_enabled then return end
+    if (storage.advisor_next_tick or 0) > game.tick then return end
+    storage.advisor_next_tick = game.tick + 3600
+    local ok, report = pcall(build_factory_report)
+    if not ok or not report then
+        log("[AUTORIO] Factory advisor failed: " .. tostring(report))
+        return
+    end
+    storage.advisor_last_report = report
+    if report.signature ~= storage.advisor_last_signature and report.line then
+        storage.advisor_last_signature = report.signature
+        game.print("[AI Companion]: " .. report.line)
+        log("[AUTORIO] Advisor: " .. report.line)
+    end
+end
+
 script.on_event(defines.events.on_tick, function(unused_event)
     if not setup_complete and not (storage and storage.setup_complete) then 
         setup(nil)
     end
+
+    run_factory_advisor()
 
     local bot = get_companion_body()
     if bot == nil or not bot.valid then return end
@@ -2490,7 +2716,7 @@ script.on_event(defines.events.on_entity_died, function(event)
     log("[AUTORIO] Companion died, saved " .. #storage.saved_bot_items .. " item stacks")
 end)
 
-log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v13 chase)")
+log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v14 advisor)")
 return ____exports
  end,
 ["utils.hot_reload"] = function(...) return {} end,
