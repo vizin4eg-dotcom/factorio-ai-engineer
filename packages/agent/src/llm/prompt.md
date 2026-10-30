@@ -143,7 +143,9 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
      * "Подъедь ко мне" / "drive to me": use `human_player.x` and `human_player.y`.
    - `exit_vehicle()`: `remote.call('autorio_operations', 'exit_vehicle')`
      * Brakes and gets out.
-   - "Езжай за мной" / "follow me in the car": `enter_vehicle` (skip if already driving), then `follow_player`. The car keeps pace with the human. `cancel_all_tasks` stops and brakes.
+   - "Едь за мной" / "езжай за мной" / "follow me in the tank": call `follow_player` once. Do not also call `drive_to` or `driveTo`. While follow is on, the tank already chases the human and will not stop.
+   - If he is already following or already sitting in the tank, return `operationCommands: []`. Do not repeat "следую", "еду за тобой" or "еду к точке".
+   - `cancel_all_tasks` stops the chase and brakes.
    - Do not use `walk_to` for a trip that should be driven.
    - Put these only in `operationCommands`. Do not also call a tool for the same action.
 
