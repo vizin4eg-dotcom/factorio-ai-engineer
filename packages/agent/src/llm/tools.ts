@@ -196,4 +196,32 @@ export const tools: ToolFunction[] = [
       return response.data?.output || '{}'
     },
   },
+  {
+    name: 'scanPatch',
+    description: 'Measure the nearest ore patch. Returns tile count, ore amount and width x height. Lua prints the same line in chat.',
+    schema: z.object({
+      name: z.string().optional().describe('iron-ore, copper-ore, coal, stone, uranium-ore, or a Russian alias. Empty picks the nearest ore.'),
+    }),
+    fn: async ({ name }) => {
+      const ore = String(name ?? '').replace(/["\\]/g, '')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "scan_patch", "${ore}")` },
+      })
+      return response.data?.output || '{}'
+    },
+  },
+  {
+    name: 'minePatch',
+    description: 'Build the nearest ore patch with electric mining drills, transport belts and medium electric poles. Lua plans the layout. Missing items become ghosts.',
+    schema: z.object({
+      name: z.string().optional().describe('iron-ore, copper-ore, coal, stone, uranium-ore, or a Russian alias.'),
+    }),
+    fn: async ({ name }) => {
+      const ore = String(name ?? '').replace(/["\\]/g, '')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_operations", "mine_patch", "${ore}")` },
+      })
+      return response.data?.output || 'true'
+    },
+  },
 ]

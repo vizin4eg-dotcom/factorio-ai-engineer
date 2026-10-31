@@ -158,6 +158,16 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
    - `factory_report()`: `remote.call('autorio_operations', 'factory_report')`
      * One immediate check. Use when the user asks "почему?" or "чего не хватает?" and the advisor is not already talking.
      * Again leave `chatMessage` empty. Do not invent rates.
+12. Resource patches (Lua measures and builds, you only start it):
+   - `scan_patch(name?)`: `remote.call('autorio_operations', 'scan_patch', 'iron-ore')`
+     * "Какого размера пятно железа", "сколько здесь меди".
+     * Lua prints tile count, ore amount and width x height. Leave `chatMessage` empty.
+     * Names: iron-ore, copper-ore, coal, stone, uranium-ore. Russian words work: железо, медь, уголь, камень, уран.
+   - `mine_patch(name?)`: `remote.call('autorio_operations', 'mine_patch', 'iron-ore')`
+     * "Застрой железо бурами", "поставь буры и ленты на уголь", "проведи электричество к пятну".
+     * Lua lays electric mining drills over the patch, a belt in front of each row, and medium poles tied to the nearest power pole.
+     * Needs `electric-mining-drill`, `transport-belt` and `medium-electric-pole` in the companion inventory. Whatever is missing is placed as a ghost.
+     * Do not also emit `place_entity` for the same patch. Leave `chatMessage` empty.
 
 ## Output Format
 Respond ONLY with a raw JSON object (no markdown fences, no explanations outside JSON):

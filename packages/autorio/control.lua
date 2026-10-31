@@ -350,6 +350,7 @@ ____exports.TaskStates.EQUIPPING_MODULE = "equipping_module"
 ____exports.TaskStates.ENTERING_VEHICLE = "entering_vehicle"
 ____exports.TaskStates.DRIVING = "driving"
 ____exports.TaskStates.EXITING_VEHICLE = "exiting_vehicle"
+____exports.TaskStates.BUILDING_PATCH = "building_patch"
 return ____exports
  end,
 
@@ -417,6 +418,9 @@ function ____exports.new_task_manager(self)
                 break
             elseif switch_state == TaskStates.EXITING_VEHICLE then
                 player_state.parameters_exit_vehicle = task
+                break
+            elseif switch_state == TaskStates.BUILDING_PATCH then
+                player_state.parameters_build_patch = task
                 break
             elseif switch_state == TaskStates.CRAFTING then
                 do
@@ -498,6 +502,7 @@ function ____exports.new_task_manager(self)
         player_state.parameters_enter_vehicle = nil
         player_state.parameters_driving = nil
         player_state.parameters_exit_vehicle = nil
+        player_state.parameters_build_patch = nil
         player_state.parameters_build_ghosts = nil
     end
 
@@ -1267,6 +1272,39 @@ remote.add_interface(
             return true
         end,
 
+
+        scan_patch = function(resource_name, x, y)
+            local info = describe_resource_patch(resource_name, x, y)
+            if info then game.print("[AI Companion]: " .. info.line) end
+            pcall(function() rcon.print(helpers.table_to_json(info or {found = false})) end)
+            return true
+        end,
+        scanPatch = function(resource_name, x, y)
+            return remote.call("autorio_operations", "scan_patch", resource_name, x, y)
+        end,
+        mine_patch = function(resource_name, x, y)
+            local plan = plan_resource_patch(resource_name, x, y)
+            if not plan or not plan.steps or #plan.steps == 0 then
+                game.print("[AI Companion]: " .. ((plan and plan.line) or "Пятно не нашёл."))
+                return false
+            end
+            game.print("[AI Companion]: " .. plan.line)
+            task_manager:add_task({
+                type = TaskStates.BUILDING_PATCH,
+                steps = plan.steps,
+                index = 1,
+                placed = 0,
+                ghosts = 0,
+                skipped = 0,
+                stuck = 0,
+                announced = {}
+            })
+            log("[AUTORIO] mine_patch steps " .. tostring(#plan.steps))
+            return true
+        end,
+        minePatch = function(resource_name, x, y)
+            return remote.call("autorio_operations", "mine_patch", resource_name, x, y)
+        end,
         start_advisor = function()
             storage.advisor_enabled = true
             storage.advisor_last_signature = nil
@@ -2530,6 +2568,420 @@ local function run_factory_advisor()
     end
 end
 
+
+local RESOURCE_NAMES = {
+    ["железо"] = "iron-ore", ["железа"] = "iron-ore", ["iron"] = "iron-ore", ["iron-ore"] = "iron-ore",
+    ["медь"] = "copper-ore", ["меди"] = "copper-ore", ["copper"] = "copper-ore", ["copper-ore"] = "copper-ore",
+    ["уголь"] = "coal", ["угля"] = "coal", ["coal"] = "coal",
+    ["камень"] = "stone", ["камня"] = "stone", ["stone"] = "stone",
+    ["уран"] = "uranium-ore", ["урана"] = "uranium-ore", ["uranium"] = "uranium-ore", ["uranium-ore"] = "uranium-ore"
+}
+
+local function resolve_resource_name(name)
+    if type(name) ~= "string" then return nil end
+    local key = string.lower(name):match("^%s*(.-)%s*$")
+    if key == "" then return nil end
+    return RESOURCE_NAMES[key] or key
+end
+
+local function patch_origin(x, y)
+    local bot = get_companion_body()
+    if x ~= nil and y ~= nil and tonumber(x) and tonumber(y) then
+        return {x = tonumber(x), y = tonumber(y)}
+    end
+    if bot and bot.valid then return bot.position end
+    local human = get_target_player(1)
+    if human and human.character and human.character.valid then return human.character.position end
+    return nil
+end
+
+local function collect_patch(resource_name, x, y)
+    local origin = patch_origin(x, y)
+    local bot = get_companion_body()
+    local surface = (bot and bot.valid and bot.surface) or (get_target_player(1) and get_target_player(1).surface)
+    if not origin or not surface then return nil end
+    local wanted = resolve_resource_name(resource_name)
+    local filter = {position = origin, radius = 160, type = "resource"}
+    if wanted then filter.name = wanted end
+    local found = surface.find_entities_filtered(filter)
+    if #found == 0 then return nil end
+    local nearest, best = nil, math.huge
+    for _, ent in ipairs(found) do
+        if ent.valid then
+            local d = (ent.position.x - origin.x) ^ 2 + (ent.position.y - origin.y) ^ 2
+            if d < best then best, nearest = d, ent end
+        end
+    end
+    if not nearest then return nil end
+    local ore_name = nearest.name
+    local tiles = {}
+    for _, ent in ipairs(found) do
+        if ent.valid and ent.name == ore_name then
+            local tx, ty = math.floor(ent.position.x), math.floor(ent.position.y)
+            tiles[tx .. "," .. ty] = (ent.amount or 0)
+        end
+    end
+    local start_x, start_y = math.floor(nearest.position.x), math.floor(nearest.position.y)
+    local patch, queue = {}, {{start_x, start_y}}
+    local head = 1
+    patch[start_x .. "," .. start_y] = tiles[start_x .. "," .. start_y] or 0
+    local minx, miny, maxx, maxy = start_x, start_y, start_x, start_y
+    local total = patch[start_x .. "," .. start_y]
+    local count = 1
+    while queue[head] and count < 2500 do
+        local cx, cy = queue[head][1], queue[head][2]
+        head = head + 1
+        for dy = -1, 1 do
+            for dx = -1, 1 do
+                if not (dx == 0 and dy == 0) then
+                    local nx, ny = cx + dx, cy + dy
+                    local nk = nx .. "," .. ny
+                    if tiles[nk] and patch[nk] == nil then
+                        patch[nk] = tiles[nk]
+                        total = total + tiles[nk]
+                        count = count + 1
+                        if nx < minx then minx = nx end
+                        if ny < miny then miny = ny end
+                        if nx > maxx then maxx = nx end
+                        if ny > maxy then maxy = ny end
+                        queue[#queue + 1] = {nx, ny}
+                        if count >= 2500 then break end
+                    end
+                end
+            end
+        end
+    end
+    return {
+        name = ore_name,
+        tiles = patch,
+        count = count,
+        amount = total,
+        minx = minx, miny = miny, maxx = maxx, maxy = maxy,
+        width = maxx - minx + 1,
+        height = maxy - miny + 1,
+        surface = surface,
+        capped = count >= 2500
+    }
+end
+
+local function drill_hits(tiles, cx, cy)
+    local hits = 0
+    for ty = cy - 2, cy + 2 do
+        for tx = cx - 2, cx + 2 do
+            if tiles[tx .. "," .. ty] then hits = hits + 1 end
+        end
+    end
+    return hits
+end
+
+local function push_step(steps, seen, name, tx, ty, direction)
+    local key = name .. "@" .. tx .. "," .. ty
+    if seen[key] then return end
+    seen[key] = true
+    steps[#steps + 1] = {name = name, x = tx, y = ty, direction = direction}
+end
+
+local function plan_rows(patch)
+    local tiles = patch.tiles
+    local rows = {}
+    local y = patch.miny + 1
+    while y - 2 <= patch.maxy do
+        local drills = {}
+        local x = patch.minx + 1
+        while x - 2 <= patch.maxx do
+            if drill_hits(tiles, x, y) >= 3 then
+                drills[#drills + 1] = {x = x, y = y}
+            end
+            x = x + 3
+        end
+        if #drills > 0 then rows[#rows + 1] = {y = y, drills = drills} end
+        y = y + 5
+    end
+    return rows
+end
+
+local function steps_from_rows(rows, along_x)
+    local steps, seen = {}, {}
+    local trunk = nil
+    for _, row in ipairs(rows) do
+        local last = row.drills[#row.drills]
+        local edge = last.x + 2
+        if not trunk or edge > trunk then trunk = edge end
+    end
+    for _, row in ipairs(rows) do
+        local belt_y = row.y + 2
+        local pole_y = row.y + 3
+        local min_dx = row.drills[1].x
+        for _, drill in ipairs(row.drills) do
+            push_step(steps, seen, "electric-mining-drill", drill.x, drill.y, "south")
+        end
+        for bx = min_dx, (trunk or min_dx) - 1 do
+            push_step(steps, seen, "transport-belt", bx, belt_y, "east")
+        end
+        if trunk then
+            push_step(steps, seen, "transport-belt", trunk, belt_y, "south")
+        end
+        local px = min_dx
+        local last_x = row.drills[#row.drills].x
+        while px <= last_x do
+            push_step(steps, seen, "medium-electric-pole", px, pole_y, "north")
+            px = px + 6
+        end
+        push_step(steps, seen, "medium-electric-pole", last_x, pole_y, "north")
+    end
+    if not along_x then
+        for _, step in ipairs(steps) do
+            step.x, step.y = step.y, step.x
+            if step.direction == "south" then step.direction = "east"
+            elseif step.direction == "east" then step.direction = "south" end
+        end
+    end
+    return steps, trunk
+end
+
+local function link_power(surface, force, steps, origin)
+    local anchor = nil
+    for _, step in ipairs(steps) do
+        if step.name == "medium-electric-pole" then anchor = step break end
+    end
+    if not anchor or not surface then return 0 end
+    local poles = surface.find_entities_filtered{
+        position = {anchor.x + 0.5, anchor.y + 0.5},
+        radius = 90,
+        type = "electric-pole",
+        force = force
+    }
+    local nearest, best = nil, math.huge
+    for _, pole in ipairs(poles) do
+        if pole.valid then
+            local d = (pole.position.x - anchor.x) ^ 2 + (pole.position.y - anchor.y) ^ 2
+            if d > 4 and d < best then best, nearest = d, pole end
+        end
+    end
+    if not nearest then return 0 end
+    local dx = nearest.position.x - (anchor.x + 0.5)
+    local dy = nearest.position.y - (anchor.y + 0.5)
+    local dist = math.sqrt(dx * dx + dy * dy)
+    if dist <= 9 then return 0 end
+    local n = math.ceil(dist / 8)
+    local added = 0
+    local seen = {}
+    for _, step in ipairs(steps) do seen[step.name .. "@" .. step.x .. "," .. step.y] = true end
+    for i = 1, n - 1 do
+        local t = i / n
+        local tx = math.floor(anchor.x + dx * t)
+        local ty = math.floor(anchor.y + dy * t)
+        local key = "medium-electric-pole@" .. tx .. "," .. ty
+        if not seen[key] then
+            seen[key] = true
+            steps[#steps + 1] = {name = "medium-electric-pole", x = tx, y = ty, direction = "north"}
+            added = added + 1
+        end
+    end
+    return added
+end
+
+local function count_steps(steps)
+    local drills, belts, poles = 0, 0, 0
+    for _, step in ipairs(steps) do
+        if step.name == "electric-mining-drill" then drills = drills + 1
+        elseif step.name == "transport-belt" then belts = belts + 1
+        else poles = poles + 1 end
+    end
+    return drills, belts, poles
+end
+
+local function format_amount(amount)
+    if amount >= 1000000 then return string.format("%.1f млн", amount / 1000000) end
+    if amount >= 1000 then return string.format("%.0f тыс", amount / 1000) end
+    return tostring(math.floor(amount))
+end
+
+function describe_resource_patch(resource_name, x, y)
+    local patch = collect_patch(resource_name, x, y)
+    if not patch then
+        return {found = false, line = "Рудного пятна рядом не вижу."}
+    end
+    local line = string.format(
+        "Пятно %s: %d клеток, %s руды, размер %d на %d.",
+        patch.name, patch.count, format_amount(patch.amount), patch.width, patch.height
+    )
+    if patch.capped then line = line .. " Дальше 2500 клеток не смотрел." end
+    patch.line = line
+    patch.tiles = nil
+    patch.surface = nil
+    return patch
+end
+
+function plan_resource_patch(resource_name, x, y)
+    local patch = collect_patch(resource_name, x, y)
+    if not patch then return {steps = {}, line = "Рудного пятна рядом не вижу."} end
+    local along_x = patch.width >= patch.height
+    local rows
+    if along_x then
+        rows = plan_rows(patch)
+    else
+        local swapped = {
+            tiles = {},
+            minx = patch.miny, maxx = patch.maxy,
+            miny = patch.minx, maxy = patch.maxx
+        }
+        for key, _ in pairs(patch.tiles) do
+            local tx, ty = key:match("^(%-?%d+),(%-?%d+)$")
+            swapped.tiles[ty .. "," .. tx] = true
+        end
+        rows = plan_rows(swapped)
+    end
+    local steps = steps_from_rows(rows, along_x)
+    local bot = get_companion_body()
+    local force = bot and bot.force
+    if force then link_power(patch.surface, force, steps, bot and bot.position) end
+    if bot and bot.valid and #steps > 1 then
+        local bx, by = bot.position.x, bot.position.y
+        table.sort(steps, function(a, b)
+            local da = (a.x + 0.5 - bx) ^ 2 + (a.y + 0.5 - by) ^ 2
+            local db = (b.x + 0.5 - bx) ^ 2 + (b.y + 0.5 - by) ^ 2
+            if a.name ~= b.name then
+                if a.name == "medium-electric-pole" then return true end
+                if b.name == "medium-electric-pole" then return false end
+                if a.name == "electric-mining-drill" then return true end
+                if b.name == "electric-mining-drill" then return false end
+            end
+            return da < db
+        end)
+    end
+    if #steps > 800 then
+        for i = 801, #steps do steps[i] = nil end
+    end
+    local drills, belts, poles = count_steps(steps)
+    local line = string.format(
+        "Пятно %s: %d клеток, %s руды, %d на %d. Ставлю %d буров, %d лент, %d столбов.",
+        patch.name, patch.count, format_amount(patch.amount), patch.width, patch.height, drills, belts, poles
+    )
+    if patch.capped then line = line .. " Пятно обрезано по 2500 клеток." end
+    return {steps = steps, line = line, name = patch.name}
+end
+
+local PATCH_DIR = {
+    north = defines.direction.north,
+    south = defines.direction.south,
+    east = defines.direction.east,
+    west = defines.direction.west
+}
+
+local function place_patch_step(bot, step)
+    local surface = bot.surface
+    local pos = {x = step.x + 0.5, y = step.y + 0.5}
+    local direction = PATCH_DIR[step.direction] or defines.direction.north
+    local check = {name = step.name, position = pos, direction = direction, force = bot.force}
+    if not surface.can_place_entity(check) then
+        if step.name == "medium-electric-pole" then
+            local alt = surface.find_non_colliding_position(step.name, pos, 2, 0.5)
+            if alt then
+                pos = alt
+                check.position = alt
+                if not surface.can_place_entity(check) then return "skip" end
+            else
+                return "skip"
+            end
+        else
+            return "skip"
+        end
+    end
+    local inventory = bot.get_main_inventory()
+    local have = inventory and inventory.get_item_count(step.name) or 0
+    if have > 0 then
+        local entity = surface.create_entity{
+            name = step.name,
+            position = pos,
+            direction = direction,
+            force = bot.force,
+            raise_built = true
+        }
+        if entity then
+            inventory.remove{name = step.name, count = 1}
+            return "placed"
+        end
+    end
+    local ok, ghost = pcall(function()
+        return surface.create_entity{
+            name = "entity-ghost",
+            inner_name = step.name,
+            position = pos,
+            direction = direction,
+            force = bot.force,
+            expires = false
+        }
+    end)
+    if ok and ghost then return "ghost" end
+    return "skip"
+end
+
+local function state_building_patch(self, bot)
+    local params = task_manager.player_state.parameters_build_patch
+    if not params or not params.steps then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+    local riding = false
+    local ok_vehicle, ridden = pcall(function() return bot.vehicle end)
+    if ok_vehicle and ridden and ridden.valid then riding = true end
+    if riding then
+        game.print("[AI Companion]: Сначала выйду из транспорта, из него не строю.")
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+    if params.index > #params.steps then
+        game.print(string.format(
+            "[AI Companion]: Застройка готова. Поставил %d, чертежей %d, пропустил %d.",
+            params.placed or 0, params.ghosts or 0, params.skipped or 0
+        ))
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+    local step = params.steps[params.index]
+    local pos = {x = step.x + 0.5, y = step.y + 0.5}
+    local dx = pos.x - bot.position.x
+    local dy = pos.y - bot.position.y
+    if dx * dx + dy * dy > 36 then
+        bot.walking_state = {walking = true, direction = get_direction(nil, bot.position, pos)}
+        local moved = math.abs(bot.position.x - (params.last_x or 0)) + math.abs(bot.position.y - (params.last_y or 0))
+        if moved < 0.05 then
+            params.stuck = (params.stuck or 0) + 1
+        else
+            params.stuck = 0
+        end
+        params.last_x, params.last_y = bot.position.x, bot.position.y
+        if params.stuck < 120 then return end
+        params.skipped = (params.skipped or 0) + 1
+        params.index = params.index + 1
+        params.stuck = 0
+        return
+    end
+    bot.walking_state = {walking = false}
+    local result = place_patch_step(bot, step)
+    if result == "placed" then params.placed = (params.placed or 0) + 1
+    elseif result == "ghost" then
+        params.ghosts = (params.ghosts or 0) + 1
+        params.announced = params.announced or {}
+        if not params.announced[step.name] then
+            params.announced[step.name] = true
+            game.print("[AI Companion]: " .. step.name .. " кончились, дальше ставлю чертежи.")
+        end
+    else
+        params.skipped = (params.skipped or 0) + 1
+    end
+    params.index = params.index + 1
+    params.stuck = 0
+    local built = (params.placed or 0) + (params.ghosts or 0)
+    if built > 0 and built % 40 == 0 then
+        game.print(string.format("[AI Companion]: Застройка %d/%d.", params.index - 1, #params.steps))
+    end
+end
+
 script.on_event(defines.events.on_tick, function(unused_event)
     if not setup_complete and not (storage and storage.setup_complete) then 
         setup(nil)
@@ -2649,6 +3101,7 @@ script.on_event(defines.events.on_tick, function(unused_event)
     elseif state == TaskStates.ENTERING_VEHICLE then state_entering_vehicle(nil, bot)
     elseif state == TaskStates.DRIVING then state_driving(nil, bot)
     elseif state == TaskStates.EXITING_VEHICLE then state_exiting_vehicle(nil, bot)
+    elseif state == TaskStates.BUILDING_PATCH then state_building_patch(nil, bot)
     elseif state == TaskStates.CRAFTING then state_crafting(nil, bot)
     end
 end)
@@ -2716,7 +3169,7 @@ script.on_event(defines.events.on_entity_died, function(event)
     log("[AUTORIO] Companion died, saved " .. #storage.saved_bot_items .. " item stacks")
 end)
 
-log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v14 advisor)")
+log("[AUTORIO] Mod loaded (Autonomous Companion Architecture v15 patch)")
 return ____exports
  end,
 ["utils.hot_reload"] = function(...) return {} end,
