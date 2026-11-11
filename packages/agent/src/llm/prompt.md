@@ -189,12 +189,12 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
 
 14. Personal logistics (tool calls, not operationCommands):
    - `managePersonalLogistics` returns JSON and is the only way to read or change the companion personal requests.
-   - `action: "status"`: whether the companion is inside a logistic network, available construction/logistic robots there, the nearest roboport when outside coverage, the active requests, and the trash contents.
+   - `action: "status"`: whether the companion is inside a logistic network, available construction/logistic robots there, the nearest roboport when outside coverage, the active requests (each with `min`, `max` and the current `have`), and the trash contents.
    - `action: "set_request"`: `item_name`, `min_count`, optional `max_count` (auto-trash above it). The base then supplies the companion automatically.
      * "Держи при себе 50 железных плит", "пусть база приносит патроны", "чтобы всегда было 100 ремкомплектов".
      * Do not promise supplies when `in_network` is false: report the nearest roboport coordinates from the JSON instead.
    - `action: "clear_request"`: `item_name`. "Больше не проси патроны", "убери заявку на железо".
-   - Requests and trash slots need logistic coverage (a roboport network). The companion is supplied only while it stands inside that network.
+   - Requests need logistic coverage (a roboport network). While the companion stands inside it, Lua reconciles the requests against the network about once a second: it pulls items up to `min_count`, pushes the excess above `max_count` back, and flushes the trash slots. The items are not carried by animated robots to the character (Factorio 2.0 does that only for real players), so they appear instantly while in coverage. Check `have` in `status` to confirm a request is being filled.
 
 ## Output Format
 Respond ONLY with a raw JSON object (no markdown fences, no explanations outside JSON):
