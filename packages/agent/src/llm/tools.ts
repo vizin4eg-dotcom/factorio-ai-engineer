@@ -123,6 +123,62 @@ export const tools: ToolFunction[] = [
     },
   },
   {
+    name: 'manageArmorGrid',
+    description: 'Inspect or change the companion armor equipment grid. inspect returns grid size, installed modules with positions, energy/shield totals and construction robot counts. equip/unequip move modules between inventory and grid. toggle_roboport enables or disables personal construction robot dispatch. Returns JSON.',
+    schema: z.object({
+      action: z.enum(['inspect', 'equip', 'unequip', 'toggle_roboport']).describe('inspect = read the grid; equip/unequip = move equipment; toggle_roboport = enable or disable personal construction robots.'),
+      // eslint-disable-next-line ts/naming-convention
+      equipment_name: z.string().optional().describe('Equipment name, e.g. solar-panel-equipment, battery-equipment, personal-roboport-equipment, exoskeleton-equipment. Short aliases like solar-panel also work. Use "all" to strip the grid on unequip.'),
+      count: z.number().optional().describe('How many modules to equip or unequip. Defaults to 1.'),
+      x: z.number().optional().describe('Optional grid x for the module. Omit to auto-place.'),
+      y: z.number().optional().describe('Optional grid y for the module. Omit to auto-place.'),
+      enabled: z.boolean().optional().describe('For toggle_roboport: true or false to force a state. Omit to toggle.'),
+    }),
+    fn: async (args: any) => {
+      const what = String(args.action ?? 'inspect').replace(/["\\]/g, '')
+      const item = String(args.equipment_name ?? '').replace(/["\\]/g, '')
+      const count = args.count
+      const x = args.x
+      const y = args.y
+      const enabled = args.enabled
+      const countArg = count === undefined ? '1' : String(Math.trunc(Number(count)))
+      const xArg = x === undefined ? '-1' : String(Number(x))
+      const yArg = y === undefined ? '-1' : String(Number(y))
+      const enabledArg = enabled === undefined ? '""' : (enabled ? 'true' : 'false')
+      logger.withFields({ action: what, name: item, count: countArg, x: xArg, y: yArg, enabled }).debug('Managing armor grid')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "manage_armor_grid", "${what}", "${item}", ${countArg}, ${xArg}, ${yArg}, ${enabledArg})` },
+      })
+      return response.data?.output || '{"ok":false,"error":"no output"}'
+    },
+  },
+  {
+    name: 'managePersonalLogistics',
+    description: 'Inspect or change the companion personal logistic requests. status returns network coverage, robot counts, the nearest roboport when outside coverage, active requests and trash contents. set_request asks the logistic network to keep an item stocked and can auto-trash the excess. clear_request removes the request. Returns JSON.',
+    schema: z.object({
+      action: z.enum(['status', 'set_request', 'clear_request']).describe('status = read requests and network; set_request = add or update a request; clear_request = remove a request.'),
+      // eslint-disable-next-line ts/naming-convention
+      item_name: z.string().optional().describe('Item name for set_request/clear_request, e.g. iron-plate, construction-robot, firearm-magazine.'),
+      // eslint-disable-next-line ts/naming-convention
+      min_count: z.number().optional().describe('Minimum amount to keep in the inventory. Defaults to 0.'),
+      // eslint-disable-next-line ts/naming-convention
+      max_count: z.number().optional().describe('Optional auto-trash threshold: excess above this is sent to trash. Omit for no auto-trash.'),
+    }),
+    fn: async (args: any) => {
+      const what = String(args.action ?? 'status').replace(/["\\]/g, '')
+      const item = String(args.item_name ?? '').replace(/["\\]/g, '')
+      const minCount = args.min_count
+      const maxCount = args.max_count
+      const minArg = minCount === undefined ? '-1' : String(Math.trunc(Number(minCount)))
+      const maxArg = maxCount === undefined ? '-1' : String(Math.trunc(Number(maxCount)))
+      logger.withFields({ action: what, item, min: minArg, max: maxArg }).debug('Managing personal logistics')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "manage_personal_logistics", "${what}", "${item}", ${minArg}, ${maxArg})` },
+      })
+      return response.data?.output || '{"ok":false,"error":"no output"}'
+    },
+  },
+  {
     name: 'enterVehicle',
     description: 'Walk to a free car or tank and become the driver. Does not steal an occupied vehicle. Loads fuel from the companion inventory if the vehicle is empty.',
     schema: z.object({

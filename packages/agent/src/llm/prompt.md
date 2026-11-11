@@ -10,6 +10,8 @@ Every message includes a small `[Current Observation]` with:
 
 Everything else is NOT sent automatically — fetch it with a tool when (and only when) the request needs it:
 - inventory / equipped gear -> `getInventoryItems`
+- armor grid layout, energy, robot dispatch -> `manageArmorGrid`
+- personal logistic requests and network coverage -> `managePersonalLogistics`
 - factory health (power, boiler fuel, robots) -> `getBaseTelemetry`
 - main base size and bounds -> `getMainBaseFootprint`
 - nests and worms near the main base -> `getMainBaseThreats`
@@ -125,14 +127,18 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
 9. Armor modules (equipment grid, not crafting modules like speed-module):
    - The companion must already be wearing armor that has a grid (`modular-armor`, `power-armor`, `power-armor-mk2`). `light-armor` has no grid: call `equip_armor` first.
    - The modules must already be in the companion inventory.
-   - `equip_module(name, count?)`: `remote.call('autorio_operations', 'equip_module', 'solar-panel-equipment', 4)`
+   - To look at the grid, use the `manageArmorGrid` tool with `action: "inspect"` (size, installed modules with positions, energy/shield totals, construction robots).
+   - `equip_module(name, count?, x?, y?)`: `remote.call('autorio_operations', 'equip_module', 'solar-panel-equipment', 4)`
      * Inserts that equipment into the worn armor grid.
      * `count` defaults to 1. Pass `'all'` to fill every free slot with that module.
      * Pass `''` as the name only when the user says to insert every module they are carrying.
-   - `remove_module(name, count?)`: `remote.call('autorio_operations', 'remove_module', 'solar-panel-equipment', 1)`
+     * `x` and `y` are optional grid coordinates; omit them to auto-place.
+   - `remove_module(name, count?, x?, y?)`: `remote.call('autorio_operations', 'remove_module', 'solar-panel-equipment', 1)`
      * Takes equipment out of the grid and back into inventory.
      * `remove_module('all')` strips the whole grid.
+     * The task reports a real result now: `[AUTORIO] [ERROR] equip_module` / `remove_module` means the module was missing, the armor has no grid, or there was no free space.
    - Use real item names. These short aliases also work: `solar-panel`, `battery`, `battery-mk2`, `exoskeleton`, `personal-roboport`, `personal-roboport-mk2`, `night-vision`, `belt-immunity`, `personal-laser-defense`, `energy-shield`, `energy-shield-mk2`, `fusion-reactor`.
+   - To disable or enable personal construction robots ("выключи роботов", "не строй роботами", "включи роботов") use the `manageArmorGrid` tool with `action: "toggle_roboport"`. It toggles by default; pass `enabled: false` or `true` to force the state.
    - Triggers: "вставь модули", "поставь панели в броню", "надень экзоскелет", "сними щит", "equip modules".
 10. Vehicles (car or tank only):
    - `enter_vehicle(name?)`: `remote.call('autorio_operations', 'enter_vehicle', 'car')`
@@ -180,6 +186,15 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
      * It checks ammo, equips combat gear, and engages properly.
      * Leave `chatMessage` empty — Lua reports progress itself.
      * Default distance is 60 tiles from the edge of the main base.
+
+14. Personal logistics (tool calls, not operationCommands):
+   - `managePersonalLogistics` returns JSON and is the only way to read or change the companion personal requests.
+   - `action: "status"`: whether the companion is inside a logistic network, available construction/logistic robots there, the nearest roboport when outside coverage, the active requests, and the trash contents.
+   - `action: "set_request"`: `item_name`, `min_count`, optional `max_count` (auto-trash above it). The base then supplies the companion automatically.
+     * "Держи при себе 50 железных плит", "пусть база приносит патроны", "чтобы всегда было 100 ремкомплектов".
+     * Do not promise supplies when `in_network` is false: report the nearest roboport coordinates from the JSON instead.
+   - `action: "clear_request"`: `item_name`. "Больше не проси патроны", "убери заявку на железо".
+   - Requests and trash slots need logistic coverage (a roboport network). The companion is supplied only while it stands inside that network.
 
 ## Output Format
 Respond ONLY with a raw JSON object (no markdown fences, no explanations outside JSON):

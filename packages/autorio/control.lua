@@ -425,6 +425,358 @@ local function build_safe_entity_filter(target_name, center_pos, radius, force)
     return nil
 end
 
+--[[ Equipment grid and personal logistics helpers (Factorio 2.0).
+     grid.put{name = ...} creates equipment without touching any inventory, so the
+     caller removes the item itself. grid.take{name = ..., position = {x, y}} returns
+     the item stack and the caller inserts it back. Personal requests live on a
+     LuaLogisticPoint; each section stores filters shaped like
+     {value = {type = "item", name = ..., quality = ...}, min = n, max = n?}. ]]
+local EQUIPMENT_ALIASES = {
+    ["solar-panel"] = "solar-panel-equipment",
+    ["battery"] = "battery-equipment",
+    ["battery-mk2"] = "battery-mk2-equipment",
+    ["exoskeleton"] = "exoskeleton-equipment",
+    ["personal-roboport"] = "personal-roboport-equipment",
+    ["personal-roboport-mk2"] = "personal-roboport-mk2-equipment",
+    ["roboport"] = "personal-roboport-equipment",
+    ["energy-shield"] = "energy-shield-equipment",
+    ["energy-shield-mk2"] = "energy-shield-mk2-equipment",
+    ["fusion-reactor"] = "fusion-reactor-equipment",
+    ["fission-reactor"] = "fission-reactor-equipment",
+    ["night-vision"] = "night-vision-equipment",
+    ["belt-immunity"] = "belt-immunity-equipment",
+    ["discharge-defense"] = "discharge-defense-equipment"
+}
+
+local function resolve_equipment_name(raw)
+    local name = tostring(raw or "")
+    name = name:gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" then return nil end
+    local alias = EQUIPMENT_ALIASES[name]
+    if alias then return alias end
+    if prototypes.equipment[name] then return name end
+    local guess = name .. "-equipment"
+    if prototypes.equipment[guess] then return guess end
+    return nil
+end
+
+local function get_companion_grid(bot)
+    if not (bot and bot.valid) then return nil, "no companion body" end
+    local armor_inventory = bot.get_inventory(defines.inventory.character_armor)
+    if not armor_inventory or armor_inventory.is_empty() then return nil, "no armor is worn" end
+    local worn = armor_inventory[1]
+    if not (worn and worn.valid_for_read) then return nil, "no armor is worn" end
+    local grid = worn.grid
+    if not grid then return nil, "armor " .. tostring(worn.name) .. " has no equipment grid" end
+    return grid, nil, worn.name
+end
+
+local function equipment_grid_inspect(bot)
+    local result = {
+        ok = false,
+        armor = nil,
+        width = 0,
+        height = 0,
+        equipment = {},
+        energy = 0,
+        max_energy = 0,
+        shield = 0,
+        max_shield = 0,
+        personal_roboports = 0,
+        construction_robots = 0,
+        logistic_robots = 0,
+        allow_dispatching_robots = false
+    }
+    if not (bot and bot.valid) then
+        result.error = "no companion body"
+        return result
+    end
+    result.allow_dispatching_robots = bot.allow_dispatching_robots and true or false
+    local main_inventory = bot.get_main_inventory()
+    if main_inventory then
+        result.construction_robots = main_inventory.get_item_count("construction-robot")
+        result.logistic_robots = main_inventory.get_item_count("logistic-robot")
+    end
+    local grid, grid_error, armor_name = get_companion_grid(bot)
+    if not grid then
+        result.error = grid_error
+        return result
+    end
+    result.ok = true
+    result.armor = armor_name
+    result.width = grid.width
+    result.height = grid.height
+    for _, equipment in pairs(grid.equipment) do
+        if equipment and equipment.valid ~= false then
+            local energy = tonumber(equipment.energy) or 0
+            local max_energy = tonumber(equipment.max_energy) or 0
+            local shield = tonumber(equipment.shield) or 0
+            local max_shield = tonumber(equipment.max_shield) or 0
+            result.energy = result.energy + energy
+            result.max_energy = result.max_energy + max_energy
+            result.shield = result.shield + shield
+            result.max_shield = result.max_shield + max_shield
+            if equipment.name == "personal-roboport-equipment" or equipment.name == "personal-roboport-mk2-equipment" then
+                result.personal_roboports = result.personal_roboports + 1
+            end
+            result.equipment[#result.equipment + 1] = {
+                name = equipment.name,
+                x = equipment.position.x,
+                y = equipment.position.y,
+                energy = energy,
+                max_energy = max_energy,
+                shield = shield,
+                max_shield = max_shield
+            }
+        end
+    end
+    return result
+end
+
+local function equipment_grid_equip(bot, raw_name, count, x, y)
+    local grid, grid_error = get_companion_grid(bot)
+    if not grid then return 0, grid_error end
+    local name = resolve_equipment_name(raw_name)
+    if not name then return 0, "unknown equipment '" .. tostring(raw_name) .. "'" end
+    local main_inventory = bot.get_main_inventory()
+    local available = main_inventory and main_inventory.get_item_count(name) or 0
+    if available <= 0 then return 0, "'" .. name .. "' is not in the companion inventory" end
+    local wanted = tonumber(count) or 1
+    if wanted < 1 then wanted = 1 end
+    if wanted > available then wanted = available end
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    local placed = 0
+    local last_error = nil
+    for _ = 1, wanted do
+        local position = nil
+        if position_x ~= nil and position_y ~= nil then
+            position = {x = position_x, y = position_y}
+        end
+        local ok, equipment = pcall(function() return grid.put{name = name, position = position} end)
+        if not (ok and equipment) then
+            last_error = ok and "no free space in the grid" or tostring(equipment)
+            break
+        end
+        main_inventory.remove{name = name, count = 1}
+        placed = placed + 1
+    end
+    return placed, last_error
+end
+
+local function equipment_grid_unequip(bot, raw_name, count, x, y)
+    local grid, grid_error = get_companion_grid(bot)
+    if not grid then return 0, grid_error end
+    local main_inventory = bot.get_main_inventory()
+    if not main_inventory then return 0, "no main inventory" end
+    local remove_all = (raw_name == nil or raw_name == "" or raw_name == "all" or raw_name == "все")
+    local name = nil
+    if not remove_all then
+        name = resolve_equipment_name(raw_name) or tostring(raw_name)
+    end
+    local wanted = tonumber(count) or 1
+    if wanted < 1 then wanted = 1 end
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    local targets = {}
+    for _, equipment in pairs(grid.equipment) do
+        if equipment and equipment.valid ~= false then
+            local matches = remove_all or (equipment.name == name)
+            if matches and position_x ~= nil and position_y ~= nil then
+                matches = math.abs(equipment.position.x - position_x) < 0.5
+                    and math.abs(equipment.position.y - position_y) < 0.5
+            end
+            if matches then
+                targets[#targets + 1] = {
+                    name = equipment.name,
+                    position = {x = equipment.position.x, y = equipment.position.y}
+                }
+            end
+        end
+    end
+    if #targets == 0 then return 0, "no matching equipment in the grid" end
+    local removed = 0
+    local last_error = nil
+    for _, target in ipairs(targets) do
+        if removed >= wanted then break end
+        local ok, stack = pcall(function() return grid.take{name = target.name, position = target.position} end)
+        if ok and stack then
+            main_inventory.insert(stack)
+            removed = removed + 1
+        else
+            last_error = ok and "the grid refused to release the equipment" or tostring(stack)
+        end
+    end
+    return removed, last_error
+end
+
+local function personal_logistics_point(bot)
+    if not (bot and bot.valid) then return nil, "no companion body" end
+    local ok, point = pcall(function() return bot.get_requester_point() end)
+    if not ok or not point then return nil, "personal logistic point is unavailable" end
+    return point, nil
+end
+
+local function personal_logistics_section(point)
+    if point.sections_count == 0 then
+        local added = point.add_section()
+        if not added then return nil, "cannot create a personal logistic section" end
+    end
+    local ok, section = pcall(function() return point.get_section(1) end)
+    if not ok or not section then return nil, "personal logistic section is unavailable" end
+    return section, nil
+end
+
+local function personal_logistics_requests(point)
+    local requests = {}
+    for index = 1, point.sections_count do
+        local ok, section = pcall(function() return point.get_section(index) end)
+        if ok and section then
+            local ok_filters, filters = pcall(function() return section.filters end)
+            if ok_filters and filters then
+                for slot = 1, #filters do
+                    local filter = filters[slot]
+                    if filter and filter.value then
+                        requests[#requests + 1] = {
+                            item = filter.value.name,
+                            min = tonumber(filter.min) or 0,
+                            max = tonumber(filter.max)
+                        }
+                    end
+                end
+            end
+        end
+    end
+    return requests
+end
+
+local function personal_logistics_status(bot)
+    local result = {
+        ok = true,
+        in_network = false,
+        network = nil,
+        nearest_roboport = nil,
+        requests = {},
+        trash = {},
+        requests_available = false
+    }
+    if not (bot and bot.valid) then
+        result.ok = false
+        result.error = "no companion body"
+        return result
+    end
+    local network = bot.surface.find_logistic_network_by_position(bot.position, bot.force)
+    if network then
+        result.in_network = true
+        result.network = {
+            construction_robots = network.all_construction_robots,
+            available_construction_robots = network.available_construction_robots,
+            logistic_robots = network.all_logistic_robots,
+            available_logistic_robots = network.available_logistic_robots
+        }
+    else
+        local nearest = nil
+        local best_distance = nil
+        local roboports = bot.surface.find_entities_filtered{
+            type = "roboport",
+            position = bot.position,
+            radius = 512,
+            force = bot.force
+        }
+        for _, roboport in ipairs(roboports) do
+            local dx = roboport.position.x - bot.position.x
+            local dy = roboport.position.y - bot.position.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            if not best_distance or distance < best_distance then
+                nearest = roboport
+                best_distance = distance
+            end
+        end
+        if nearest then
+            result.nearest_roboport = {
+                x = math.floor(nearest.position.x),
+                y = math.floor(nearest.position.y),
+                distance = math.floor(best_distance)
+            }
+        end
+    end
+    local point, point_error = personal_logistics_point(bot)
+    if point then
+        result.requests_available = true
+        result.requests = personal_logistics_requests(point)
+    else
+        result.error = point_error
+    end
+    local trash = bot.get_inventory(defines.inventory.character_trash)
+    if trash then
+        for _, stack in ipairs(trash.get_contents()) do
+            result.trash[#result.trash + 1] = {name = stack.name, count = stack.count}
+        end
+    end
+    return result
+end
+
+local function personal_logistics_set_request(bot, item_name, min_count, max_count)
+    local item = tostring(item_name or "")
+    if item == "" then return false, "item_name is required" end
+    if not prototypes.item[item] then return false, "unknown item '" .. item .. "'" end
+    local point, point_error = personal_logistics_point(bot)
+    if not point then return false, point_error end
+    local section, section_error = personal_logistics_section(point)
+    if not section then return false, section_error end
+    local min = tonumber(min_count)
+    if min == nil or min < 0 then min = 0 end
+    min = math.floor(min)
+    local max = tonumber(max_count)
+    if max ~= nil then
+        max = math.floor(max)
+        if max == 0 then max = nil end
+        if max ~= nil and max < min then return false, "max_count must be greater than or equal to min_count" end
+    end
+    local filters = section.filters
+    local slot = nil
+    for index = 1, #filters do
+        local filter = filters[index]
+        if filter and filter.value and filter.value.name == item then
+            slot = index
+            break
+        end
+    end
+    if not slot then slot = #filters + 1 end
+    local filter = {
+        value = {type = "item", name = item, quality = "normal"},
+        min = min
+    }
+    if max then filter.max = max end
+    local ok, set_error = pcall(function() section.set_slot(slot, filter) end)
+    if not ok then return false, tostring(set_error) end
+    local readback = section.get_slot(slot)
+    if not (readback and readback.value and readback.value.name == item) then
+        return false, "the request did not stick"
+    end
+    return true, nil
+end
+
+local function personal_logistics_clear_request(bot, item_name)
+    local item = tostring(item_name or "")
+    if item == "" then return false, "item_name is required" end
+    local point, point_error = personal_logistics_point(bot)
+    if not point then return false, point_error end
+    local section, section_error = personal_logistics_section(point)
+    if not section then return false, section_error end
+    local filters = section.filters
+    local removed = 0
+    for index = #filters, 1, -1 do
+        local filter = filters[index]
+        if filter and filter.value and filter.value.name == item then
+            local ok = pcall(function() section.clear_slot(index) end)
+            if ok then removed = removed + 1 end
+        end
+    end
+    if removed == 0 then return false, "no personal request for '" .. item .. "'" end
+    return true, nil, removed
+end
+
 local function require(file, ...)
     if ____moduleCache[file] then
         return ____moduleCache[file].value
@@ -1133,6 +1485,102 @@ function ____exports.create_tools_remote_interface(self)
                 local threats = fn and fn(max_distance) or {}
                 rcon.print(helpers.table_to_json(threats))
                 return true
+            end,
+
+            manage_armor_grid = function(action, equipment_name, count, x, y, enabled)
+                local bot = get_companion_body()
+                if not (bot and bot.valid) then
+                    rcon.print('{"ok":false,"error":"no companion body"}')
+                    return false
+                end
+                local what = tostring(action or "inspect")
+                local position_x = tonumber(x)
+                if position_x and position_x < 0 then position_x = nil end
+                local position_y = tonumber(y)
+                if position_y and position_y < 0 then position_y = nil end
+                local result
+                if what == "inspect" then
+                    result = equipment_grid_inspect(bot)
+                elseif what == "equip" then
+                    local placed, equip_error = equipment_grid_equip(bot, equipment_name, count, position_x, position_y)
+                    result = {
+                        ok = placed > 0,
+                        equipped = placed,
+                        equipment = resolve_equipment_name(equipment_name),
+                        error = equip_error,
+                        grid = equipment_grid_inspect(bot)
+                    }
+                elseif what == "unequip" then
+                    local removed, remove_error = equipment_grid_unequip(bot, equipment_name, count, position_x, position_y)
+                    result = {
+                        ok = removed > 0,
+                        removed = removed,
+                        equipment = resolve_equipment_name(equipment_name) or tostring(equipment_name or "all"),
+                        error = remove_error,
+                        grid = equipment_grid_inspect(bot)
+                    }
+                elseif what == "toggle_roboport" then
+                    local previous = bot.allow_dispatching_robots and true or false
+                    local target = not previous
+                    local flag = enabled
+                    if flag == false or flag == "false" or flag == "off" or flag == 0 or flag == "0" then
+                        target = false
+                    elseif flag == true or flag == "true" or flag == "on" or flag == 1 or flag == "1" then
+                        target = true
+                    end
+                    bot.allow_dispatching_robots = target
+                    result = {
+                        ok = (bot.allow_dispatching_robots and true or false) == target,
+                        previous = previous,
+                        allow_dispatching_robots = bot.allow_dispatching_robots and true or false
+                    }
+                else
+                    result = {ok = false, error = "unknown action '" .. what .. "'"}
+                end
+                rcon.print(helpers.table_to_json(result))
+                return true
+            end,
+
+            manage_personal_logistics = function(action, item_name, min_count, max_count)
+                local bot = get_companion_body()
+                if not (bot and bot.valid) then
+                    rcon.print('{"ok":false,"error":"no companion body"}')
+                    return false
+                end
+                local what = tostring(action or "status")
+                local minimum = tonumber(min_count)
+                if minimum and minimum < 0 then minimum = nil end
+                local maximum = tonumber(max_count)
+                if maximum and maximum < 0 then maximum = nil end
+                local result
+                if what == "status" then
+                    result = personal_logistics_status(bot)
+                elseif what == "set_request" then
+                    local ok, set_error = personal_logistics_set_request(bot, item_name, minimum, maximum)
+                    local point = personal_logistics_point(bot)
+                    result = {
+                        ok = ok,
+                        item = tostring(item_name or ""),
+                        min = minimum,
+                        max = maximum,
+                        error = set_error,
+                        requests = point and personal_logistics_requests(point) or {}
+                    }
+                elseif what == "clear_request" then
+                    local ok, clear_error, cleared = personal_logistics_clear_request(bot, item_name)
+                    local point = personal_logistics_point(bot)
+                    result = {
+                        ok = ok,
+                        item = tostring(item_name or ""),
+                        cleared = cleared,
+                        error = clear_error,
+                        requests = point and personal_logistics_requests(point) or {}
+                    }
+                else
+                    result = {ok = false, error = "unknown action '" .. what .. "'"}
+                end
+                rcon.print(helpers.table_to_json(result))
+                return true
             end
         }
     )
@@ -1341,7 +1789,7 @@ remote.add_interface(
 			log("[AUTORIO] Companion equip_armor queued: " .. tostring(armor_name))
 			return true
 		end,
-        equip_module = function(equipment_name, count)
+        equip_module = function(equipment_name, count, x, y)
             local n = tonumber(count)
             if count == "all" or count == "все" then n = 1000 end
             if n == nil then n = 1 end
@@ -1349,12 +1797,14 @@ remote.add_interface(
                 type = TaskStates.EQUIPPING_MODULE,
                 equipment_name = equipment_name or "",
                 count = n,
+                x = x,
+                y = y,
                 remove = false
             })
             log("[AUTORIO] Companion equip_module queued: " .. tostring(equipment_name) .. " x" .. tostring(n))
             return true
         end,
-        remove_module = function(equipment_name, count)
+        remove_module = function(equipment_name, count, x, y)
             local n = tonumber(count)
             if count == "all" or count == "все" or equipment_name == "all" then n = 1000 end
             if n == nil then n = 1 end
@@ -1362,6 +1812,8 @@ remote.add_interface(
                 type = TaskStates.EQUIPPING_MODULE,
                 equipment_name = equipment_name or "",
                 count = n,
+                x = x,
+                y = y,
                 remove = true
             })
             log("[AUTORIO] Companion remove_module queued: " .. tostring(equipment_name))
@@ -1426,30 +1878,11 @@ remote.add_interface(
             game.print("[AI Companion]: Выхожу.")
             return true
         end,
-        equipModule = function(equipment_name, count)
-            local n = tonumber(count)
-            if count == "all" or count == "все" then n = 1000 end
-            if n == nil then n = 1 end
-            task_manager:add_task({
-                type = TaskStates.EQUIPPING_MODULE,
-                equipment_name = equipment_name or "",
-                count = n,
-                remove = false
-            })
-            game.print("[AI Companion]: Ставлю модуль " .. tostring(equipment_name) .. ".")
-            return true
+        equipModule = function(equipment_name, count, x, y)
+            return remote.call("autorio_operations", "equip_module", equipment_name, count, x, y)
         end,
-        removeModule = function(equipment_name, count)
-            local n = tonumber(count)
-            if count == "all" or count == "все" or equipment_name == "all" then n = 1000 end
-            if n == nil then n = 1 end
-            task_manager:add_task({
-                type = TaskStates.EQUIPPING_MODULE,
-                equipment_name = equipment_name or "",
-                count = n,
-                remove = true
-            })
-            return true
+        removeModule = function(equipment_name, count, x, y)
+            return remote.call("autorio_operations", "remove_module", equipment_name, count, x, y)
         end,
 
 
@@ -2671,9 +3104,37 @@ local function state_exiting_vehicle(self, bot)
 end
 
 local function state_equipping_module(self, bot)
-    log("[AUTORIO] [ERROR] equip_module: not implemented in this control.lua build")
-    game.print("[AI Companion]: Установка модулей в этой сборке не реализована (есть в upstream-коммите c159853).")
-    task_manager:reset_task_state(); task_manager:next_task()
+    local params = task_manager.player_state.parameters_equip_module
+    if not params then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
+    local count = tonumber(params.count) or 1
+    local name = params.equipment_name
+    if params.remove then
+        local removed, remove_error = equipment_grid_unequip(bot, name, count, params.x, params.y)
+        if removed == 0 then
+            log("[AUTORIO] [ERROR] remove_module " .. tostring(name) .. ": " .. tostring(remove_error))
+            game.print("[AI Companion]: Снять " .. tostring(name) .. " не вышло: " .. tostring(remove_error) .. ".")
+        else
+            log("[AUTORIO] Companion removed " .. tostring(removed) .. " x " .. tostring(name) .. " from the armor grid")
+            game.print("[AI Companion]: Снял " .. tostring(removed) .. " x " .. tostring(name) .. ".")
+        end
+    else
+        local placed, equip_error = equipment_grid_equip(bot, name, count, params.x, params.y)
+        if placed == 0 then
+            log("[AUTORIO] [ERROR] equip_module " .. tostring(name) .. ": " .. tostring(equip_error))
+            game.print("[AI Companion]: Поставить " .. tostring(name) .. " не вышло: " .. tostring(equip_error) .. ".")
+        else
+            log("[AUTORIO] Companion equipped " .. tostring(placed) .. " x " .. tostring(name) .. " into the armor grid")
+            game.print("[AI Companion]: Поставил " .. tostring(placed) .. " x " .. tostring(name) .. " в броню.")
+        end
+    end
+
+    task_manager:reset_task_state()
+    task_manager:next_task()
 end
 
 local function state_crafting(self, bot)

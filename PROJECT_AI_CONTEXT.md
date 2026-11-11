@@ -30,7 +30,7 @@ Do not invent a fourth install. Do not assume a vanilla Factorio layout.
 
 | Path | Status |
 | --- | --- |
-| `packages/autorio/control.lua` | **The mod.** Hand-edited TSTL bundle, ~3610 lines. This is what the game runs. |
+| `packages/autorio/control.lua` | **The mod.** Hand-edited TSTL bundle, ~4260 lines. This is what the game runs. |
 | `packages/autorio/src/**` | Upstream `airi-factorio` player-bot. Stale. No companion, no ghosts, no vehicles, no advisor. |
 | `packages/agent/src/llm/prompt.md` | Language → `operationCommands`. Must name Lua methods that exist. |
 | `packages/agent/src/llm/tools.ts` | Host-side tool calls. Sensors belong here. Actions mostly should not. |
@@ -57,8 +57,8 @@ Navigation: `walk_to(x, y)`, `walk_to_player()`, `walk_to_entity(name, radius)`,
 
 World: `mine_entity(name, count?)`, `place_entity(name, x, y, direction)`, `move_items(item, entity, max_count, to_entity, x, y)`, `build_ghosts(radius?, max_count?)`, `deconstruct_area(radius?)`, `craft_item(name, count)`, `wait(ticks)`.
 
-Body: `equip_armor(name?)`, `equip_module(name, count?)`, `remove_module(name, count?)`, `enter_vehicle(name?)`, `drive_to(x, y)`, `exit_vehicle()`, `attack_nearest_enemy(radius?)`.
-`equip_module` / `remove_module` are still stubs after the upstream merge: both this bundle and `origin/main` only queue `state_equipping_module` and print a message — nothing is actually equipped. Treat it as known debt, not as "port the upstream implementation".
+Body: `equip_armor(name?)`, `equip_module(name, count?, x?, y?)`, `remove_module(name, count?, x?, y?)`, `enter_vehicle(name?)`, `drive_to(x, y)`, `exit_vehicle()`, `attack_nearest_enemy(radius?)`.
+`equip_module` / `remove_module` really move equipment now: they share `equipment_grid_equip` / `equipment_grid_unequip` with the `manage_armor_grid` tool, remove the item from the main inventory on equip, and insert it back on unequip. A failure (unknown item, no armor grid, no free space) logs one `[AUTORIO] [ERROR] equip_module` / `remove_module` line. `x` and `y` are optional grid coordinates; omitted means auto-place.
 
 Advisor: `start_advisor()`, `stop_advisor()`, `factory_report()`. Lua counts and `game.print`s one line. The model does not invent rates and leaves `chatMessage` empty.
 
@@ -70,7 +70,17 @@ Directions are Factorio 2.0 16-way: N=0, E=4, S=8, W=12. `parse_direction` also 
 
 ### autorio_tools (live names)
 
-`scan_entities(radius, player_id)`, `get_inventory_items(player_id)`, `get_base_telemetry(player_id)`, `get_recipe(item, player_id)`, `tag_selected_entity(label, category, player_id)`.
+`scan_entities(radius, player_id)`, `get_inventory_items(player_id)`, `get_base_telemetry(player_id)`, `get_recipe(item, player_id)`, `tag_selected_entity(label, category, player_id)`, `get_main_base_footprint()`, `get_main_base_threats(max_distance)`, `manage_armor_grid(action, equipment_name, count, x, y, enabled)`, `manage_personal_logistics(action, item_name, min_count, max_count)`.
+
+`manage_armor_grid` actions: `inspect` (grid width/height, every module with `x`/`y`/energy/shield, totals, personal roboport count, `construction-robot`/`logistic-robot` in the main inventory, `allow_dispatching_robots`), `equip`, `unequip` (`"all"` strips the grid), `toggle_roboport` (forces `enabled` when passed). `manage_personal_logistics` actions: `status` (network coverage, available construction/logistic robots, nearest roboport outside coverage, requests, trash), `set_request`, `clear_request`. Both print one JSON object via `rcon.print`; the host tools return it verbatim. They are one-tick calls: no task state, no queue.
+
+Factorio 2.0 API notes (verified live on 2.0.77 against the companion, unit 145581):
+- `grid.put{name = ..., position = {x, y}}` creates equipment and **does not consume any inventory** — the caller removes the item. Omitting `position` auto-places. It returns `LuaEquipment` or an error.
+- `grid.take{name = ..., position = {x, y}}` returns the item stack; `{equipment = <LuaEquipment>}` is rejected ("Equipment or position not specified").
+- `grid.get_contents()` gives `{name, count, quality}`; `LuaEquipment` has `energy`, `max_energy`, `shield`, `max_shield`, `position`, `quality` (a prototype).
+- `character.allow_dispatching_robots` is the only personal-roboport switch; there is no per-equipment toggle. `defines.inventory.character_robots` does not exist in 2.0 — personal construction robots are counted in the main inventory.
+- Personal logistics: `character.get_requester_point()` → `LuaLogisticPoint`; `sections_count`, `get_section(1)` → `LuaLogisticSection` with `filters`, `set_slot(i, filter)`, `clear_slot(i)`, `get_slot(i)`. The filter shape is `{value = {type = "item", name = ..., quality = "normal"}, min = n, max = n?}` — a top-level `{name = ...}` is silently stored as an empty filter. A filter set with only `min` reads back without `max` (no auto-trash). `character_personal_logistic_requests_enabled` exists on `LuaPlayer`, not on a character entity, so the companion has no such flag.
+- Coverage comes from `surface.find_logistic_network_by_position(bot.position, bot.force)`; `point.logistic_network` may be an invalid object while out of range. `defines.inventory.character_trash` (8) still exists for the trash contents.
 
 `player_id` 1 is the human. Scans and inventory for the companion go through `get_companion_body()`, not through that id. Passing 1 does not mean "scan the human".
 
@@ -123,7 +133,7 @@ The tree is clean as of `44d99df`; the previously dirty `prompt.md`, `tools.ts`,
 - `walk_to_entity` had no `on_script_path_request_finished` handler, so it deadlocked the queue forever. The handler is back, and a 600-tick timeout covers a lost reply.
 - `CRAFTING` called `begin_crafting` twice (once in `next_task`, once in `state_crafting`), doubling the requested amount. Only `state_crafting` starts the craft now.
 - All aborting states emit `[AUTORIO] [ERROR]` (32 sites), so the agent can see failures it previously only heard about in-game.
-- `equip_module` is still a stub: `state_equipping_module` only prints a message, and upstream is the same. Modules are not actually equipped yet; do not assume they are.
+- `equip_module` was a stub: `state_equipping_module` only printed a message, and upstream was the same. Fixed on 2026-11-11 (see below).
 
 ## What changed locally on 2026-11-11
 
@@ -136,6 +146,10 @@ The tree is clean as of `44d99df`; the previously dirty `prompt.md`, `tools.ts`,
 - `walk_to(x, y)` now goes through the same pathfinder as `walk_to_entity`: a new `WALKING_TO_POINT` task requests a path to the walkable tile nearest `(x, y)` and follows it, so buildings are walked around instead of being bumped into. If the pathfinder refuses (rails), the shared fallback turns it into `WALKING_DIRECT` with the usual 20 s no-progress guard. `WALKING_TO_POINT` needs the same four pieces as any state: `TaskStates`, the `next_task` branch, `state_walking_to_point`, and the `on_tick` `elseif`.
 - `follow_player` was sticky: `storage.is_following` lived in the save, so after a reload the companion silently chased the player and fought every movement task. `setup()` now clears it; follow is opt-in per session and must be re-asked after a reload.
 - Live verification 2026-11-11: tree detour + arrival, 20 s stall abort with the queue moving on to `craft_item`, `walk_to_entity("roboport")` across the rails via the direct fallback, and the companion standing still 29 tiles from the player after the follow reset.
+- Armor grid and personal logistics are real now. `state_equipping_module` calls `equipment_grid_equip` / `equipment_grid_unequip`: the module leaves the main inventory on equip and returns on unequip, with one `[AUTORIO] [ERROR]` line on failure. `equip_module` / `remove_module` accept optional `x` / `y` grid coordinates. The camelCase aliases delegate to them instead of carrying a second copy.
+- New `autorio_tools` methods `manage_armor_grid` and `manage_personal_logistics` (backed by the `manageArmorGrid` / `managePersonalLogistics` tools in `tools.ts`, flat schemas) inspect and change both systems in one tick. `prompt.md` gained section 14 for personal logistics and points section 9 at the inspect/toggle tool.
+- `tools.test.ts` enforces that every tool schema stays flat and pins the two new tools' actions and parameter names.
+- Live API verification 2026-11-11 before the restart: `grid.put`/`take`, `get_contents`, `get_requester_point`/`get_section`/`set_slot`/`get_slot`/`clear_slot`, `allow_dispatching_robots`, `find_logistic_network_by_position`, `character_trash`. The runtime check of the new remote methods waits for a server restart (the running process still has the previous `control.lua`).
 
 ## What not to spend a session on
 
