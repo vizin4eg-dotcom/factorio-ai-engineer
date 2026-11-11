@@ -27,7 +27,7 @@ async function executeCommandFromAgent<T extends StdoutMessage>(message: T, mess
     return
   }
 
-// Отправляем сообщение агента в игровой чат без эха команды
+  // Отправляем сообщение агента в игровой чат без эха команды
   if (llmResponse.chatMessage) {
     const lines = llmResponse.chatMessage.split('\n').filter(l => l.trim().length > 0)
     for (const line of lines) {

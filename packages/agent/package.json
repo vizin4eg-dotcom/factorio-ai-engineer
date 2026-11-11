@@ -1,9 +1,9 @@
 {
-  "name": "@proj-airi/factorio-agent",
+  "name": "@vizin4eg/factorio-agent",
   "type": "module",
   "version": "0.1.0",
   "description": "An agent for Factorio written in TypeScript.",
-  "author": "LemonNekoGH",
+  "author": "vizin4eg-dotcom <vizin4eg@gmail.com>",
   "license": "MIT",
   "keywords": [
     "factorio",

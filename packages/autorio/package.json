@@ -1,8 +1,8 @@
 {
-  "name": "autorio.ts",
+  "name": "@vizin4eg/autorio",
   "version": "0.1.0",
   "description": "An automation mod for Factorio written in TypeScript.",
-  "author": "LemonNekoGH",
+  "author": "vizin4eg-dotcom <vizin4eg@gmail.com>",
   "license": "MIT",
   "keywords": [
     "factorio",
@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tstl",
     "dev": "mkdir -p dist && cp -r info.json dist && tstl --watch",
-    "typecheck": "tstl --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.1.0",

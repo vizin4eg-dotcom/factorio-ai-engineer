@@ -2,17 +2,18 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "VSCode Factorio RCON Evaluator",
-      "type": "extensionHost",
+      "name": "Agent (tsx)",
+      "type": "node-terminal",
       "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode-factorio-rcon-evaluator"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/vscode-factorio-rcon-evaluator/dist/**/*.js"
-      ],
-      "preLaunchTask": "npm: build:extension"
+      "command": "pnpm exec tsx --env-file=.env.local src/main.ts",
+      "cwd": "${workspaceFolder}/packages/agent"
+    },
+    {
+      "name": "Wrapper (tsx)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm exec tsx --env-file=.env.local src/main.ts",
+      "cwd": "${workspaceFolder}/packages/factorio-wrapper"
     }
   ]
 }

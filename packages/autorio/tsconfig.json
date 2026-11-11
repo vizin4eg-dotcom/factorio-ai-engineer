@@ -17,8 +17,7 @@
     "buildMode": "default",
     "luaLibImport": "inline",
     "luaBundle": "control.lua",
-    "luaBundleEntry": "src/control.ts",
-    ]
+    "luaBundleEntry": "src/control.ts"
   },
   "include": [
     "src/**/*.ts"

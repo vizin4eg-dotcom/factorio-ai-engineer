@@ -4,10 +4,12 @@ import { useLogg } from '@guiiai/logg'
 
 const logger = useLogg('config').useGlobalConfig()
 
+export const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
+
 export const openaiConfig: OpenAIConfig & { model?: string } = {
   apiKey: '',
   baseUrl: '',
-  model: 'gemini-2.5-flash',
+  model: DEFAULT_MODEL,
 }
 
 export const rconClientConfig: FactorioRconAPIClientConfig = {
@@ -25,7 +27,7 @@ export function initEnv() {
 
   openaiConfig.apiKey = env.OPENAI_API_KEY || ''
   openaiConfig.baseUrl = env.OPENAI_API_BASEURL || ''
-  openaiConfig.model = env.OPENAI_MODEL_NAME || env.MODEL_NAME || 'gemini-3.5-flash-lite'
+  openaiConfig.model = env.OPENAI_MODEL_NAME || env.MODEL_NAME || DEFAULT_MODEL
 
   rconClientConfig.host = env.RCON_API_SERVER_HOST || 'localhost'
   rconClientConfig.port = Number.parseInt(env.RCON_API_SERVER_PORT || '24180')

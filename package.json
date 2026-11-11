@@ -1,32 +1,30 @@
 {
-  "name": "@proj-airi/autorio-workspace",
+  "name": "factorio-ai-engineer",
   "type": "module",
   "version": "1.0.0",
   "packageManager": "pnpm@10.30.1",
-  "description": "An automation mod for Factorio written in TypeScript.",
-  "author": "LemonNekoGH",
+  "description": "An LLM-driven companion engineer for Factorio 2.0.",
+  "author": "vizin4eg-dotcom <vizin4eg@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/moeru-ai/airi-factorio"
+    "url": "https://github.com/vizin4eg-dotcom/factorio-ai-engineer"
   },
   "keywords": [
     "factorio",
     "automation",
+    "llm",
+    "agent",
     "typescript"
   ],
   "scripts": {
     "dev": "pnpm dev:packages",
-    "build": "pnpm build:apps && pnpm build:packages",
-    "build:apps": "pnpm -r --filter=./apps/* run build",
+    "build": "pnpm build:packages",
     "build:packages": "pnpm -r --filter=./packages/* run build",
     "dev:packages": "pnpm -r --filter=./packages/* run dev",
-    "dev:extension": "pnpm -r --filter=./packages/vscode-factorio-rcon-evaluator run dev",
-    "build:extension": "pnpm -r --filter=./packages/vscode-factorio-rcon-evaluator run build",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
-    "typecheck": "pnpm -r --filter=./packages/* run typecheck",
-    "bootstrap": "node scripts/bootstrap.ts"
+    "typecheck": "pnpm -r --filter=./packages/* run typecheck"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.7.3",

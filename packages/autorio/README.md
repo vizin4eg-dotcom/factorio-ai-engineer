@@ -1,4 +1,4 @@
-# autorio.ts
+# autorio
 
 ## Example
 

@@ -4,10 +4,11 @@ Write-Host "========================================================" -Foregroun
 Write-Host " Autorio Mod Synchronizer (PowerShell)" -ForegroundColor Yellow
 Write-Host "========================================================" -ForegroundColor Cyan
 
-$src = "C:\Temp\Ai\airi-factorio\packages\autorio\control.lua"
+$srcDir = Join-Path $PSScriptRoot "packages\autorio"
+$src = Join-Path $srcDir "control.lua"
 
 if (-not (Test-Path $src)) {
-    Write-Host "[ERROR] Исходный файл не найден: $src" -ForegroundColor Red
+    Write-Host "[ERROR] Источник не найден: $src" -ForegroundColor Red
     Read-Host "Нажмите Enter для выхода..."
     exit 1
 }
@@ -18,22 +19,34 @@ Write-Host "Правка: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))
 Write-Host "Размер: $($file.Length) байт"
 Write-Host "--------------------------------------------------------" -ForegroundColor Gray
 
+# Мод без info.json не загрузится, поэтому копируем и его: раньше на чистой
+# машине создавалась пустая папка с одним control.lua.
+$files = @("control.lua", "info.json")
+
 $targets = @(
-    "C:\Games\FactorioHeadless\mods\autorio\control.lua",
-    "C:\Games\Factorio\mods\autorio\control.lua",
-    (Join-Path $env:APPDATA "Factorio\mods\autorio\control.lua")
+    "C:\Games\FactorioHeadless\mods\autorio",
+    "C:\Games\Factorio\mods\autorio",
+    (Join-Path $env:APPDATA "Factorio\mods\autorio")
 )
 
-foreach ($dst in $targets) {
+foreach ($dir in $targets) {
     try {
-        $parentDir = Split-Path $dst -Parent
-        if (-not (Test-Path $parentDir)) {
-            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
-        Copy-Item -Path $src -Destination $dst -Force
-        Write-Host " [OK] ==> $dst" -ForegroundColor Green
-    } catch {
-        Write-Host " [FAIL] ==> $dst" -ForegroundColor Red
+        foreach ($name in $files) {
+            $from = Join-Path $srcDir $name
+            if (Test-Path $from) {
+                Copy-Item -Path $from -Destination (Join-Path $dir $name) -Force
+                Write-Host " [OK] ==> $(Join-Path $dir $name)" -ForegroundColor Green
+            }
+            else {
+                Write-Host " [SKIP] нет файла: $from" -ForegroundColor Yellow
+            }
+        }
+    }
+    catch {
+        Write-Host " [FAIL] ==> $dir ($($_.Exception.Message))" -ForegroundColor Red
     }
 }
 

@@ -1,9 +1,9 @@
 {
-  "name": "@proj-airi/factorio-wrapper",
+  "name": "@vizin4eg/factorio-wrapper",
   "type": "module",
   "version": "0.1.0",
   "description": "Run factorio server and convert std stream to websocket stream",
-  "author": "LemonNekoGH",
+  "author": "vizin4eg-dotcom <vizin4eg@gmail.com>",
   "license": "MIT",
   "keywords": [
     "factorio",

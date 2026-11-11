@@ -45,7 +45,8 @@ async function main() {
     // Если передан полный путь — берем как есть, если только имя файла — подставляем папку из конфига
     if (saveArg.includes('/') || saveArg.includes('\\')) {
       savePathToUse = saveArg
-    } else {
+    }
+    else {
       // Подставляем имя файла к базовой папке сейвов
       const savesDir = factorioConfig.savePath.substring(0, Math.max(factorioConfig.savePath.lastIndexOf('/'), factorioConfig.savePath.lastIndexOf('\\')))
       savePathToUse = savesDir ? `${savesDir}/${saveArg}` : saveArg

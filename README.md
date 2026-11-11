@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-An autonomous AI agent playing **Factorio 2.0 (Space Age)** in real-time using Large Language Models (Gemini / OpenAI API / Local LLMs via Kobold.cpp).
+An autonomous AI agent playing **Factorio 2.0 (Space Age)** in real-time using Large Language Models (DeepSeek via OpenRouter by default; any OpenAI-compatible API or local LLM via Kobold.cpp/Ollama).
 
 Unlike pure computer-vision approaches, this project uses a high-precision **spatial coordinate system**, interactive environment scanning, and a hybrid task-queue architecture. The AI agent inspects surrounding entities, evaluates recipes and inventory, and constructs working automated production lines directly on the map.
 
@@ -39,7 +39,7 @@ The AI agent has been uncoupled from the player's character and migrated into a 
   - Queues sequential tasks (e.g., *Craft Furnaces -> Walk -> Place in a row -> Fuel with Coal*) via in-game tick events.
 - **Safe Dynamic Entity Resolution**: Built-in translation for colloquial concepts (`tree`, `rocks`, `ore`, `enemy`) with fallback protection to prevent server crashes on unknown names.
 - **Silent Operations (`/sc`)**: Clean in-game experience without command-echo spam in chat.
-- **Fast Cloud & Local Model Support**: Works out of the box with Gemini 2.5 Flash / Flash-Lite via OpenAI-compatible API, as well as local Kobold.cpp / Ollama instances.
+- **Fast Cloud & Local Model Support**: Defaults to DeepSeek (`deepseek/deepseek-v4.1-flash-1017`) through OpenRouter, pinned to the Relace provider; any OpenAI-compatible endpoint or local Kobold.cpp / Ollama server works by changing `.env.local`.
 
 ---
 
@@ -66,7 +66,7 @@ The AI agent has been uncoupled from the player's character and migrated into a 
                                              v
                                    +--------------------+
                                    |  LLM Inference     |
-                                   |  (Gemini / OpenAI) |
+                                   |  (DeepSeek / API)  |
                                    +--------------------+
 ```
 
@@ -109,11 +109,12 @@ pnpm --filter ./packages/factorio-wrapper run dev
 Create `packages/agent/.env.local`:
 ```env
 OPENAI_API_KEY=your_api_key
-# Examples:
-# Gemini: [https://generativelanguage.googleapis.com/v1beta/openai/](https://generativelanguage.googleapis.com/v1beta/openai/)
-# OpenRouter: [https://openrouter.ai/api/v1/](https://openrouter.ai/api/v1/)
-# Local (Kobold.cpp): [http://127.0.0.1:5001/v1/](http://127.0.0.1:5001/v1/)
-OPENAI_API_BASEURL=your_api_base_url
+# Default: OpenRouter + DeepSeek
+OPENAI_API_BASEURL=https://openrouter.ai/api/v1
+OPENAI_MODEL_NAME=deepseek/deepseek-v4.1-flash-1017
+# Other OpenAI-compatible endpoints (any base URL + model id):
+# Gemini: https://generativelanguage.googleapis.com/v1beta/openai/
+# Local (Kobold.cpp): http://127.0.0.1:5001/v1/
 
 RCON_API_SERVER_PORT=24180
 RCON_API_SERVER_HOST=127.0.0.1

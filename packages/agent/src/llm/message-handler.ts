@@ -1,18 +1,19 @@
 import type { DefinedTool, Message } from 'neuri/openai'
 
 import type { StdoutMessage } from '../parser'
-import { createLogg } from '@guiiai/logg'
-import { v2FactorioConsoleCommandRawPost } from 'factorio-rcon-api-client'
-import { assistant, composeAgent, defineToolFunction, system, toolFunction, user } from 'neuri/openai'
-import { openaiConfig } from '../config'
-import { parseLLMMessage } from '../parser'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const prompt = readFileSync(join(__dirname, 'prompt.md'), 'utf-8')
+import { createLogg } from '@guiiai/logg'
+import { v2FactorioConsoleCommandRawPost } from 'factorio-rcon-api-client'
+import { assistant, composeAgent, defineToolFunction, system, toolFunction, user } from 'neuri/openai'
+import { tokenTracker } from '../../metrics'
+import { DEFAULT_MODEL, openaiConfig } from '../config'
+import { parseLLMMessage } from '../parser'
 import { tools } from './tools'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const prompt = readFileSync(join(here, 'prompt.md'), 'utf-8')
 
 const logger = createLogg('agent').useGlobalConfig()
 
@@ -27,7 +28,25 @@ export async function createMessageHandler() {
     provider: {
       apiKey: openaiConfig.apiKey,
       baseURL: openaiConfig.baseUrl,
-    },
+      // OpenRouter attribution: this is the app name shown in its activity table
+      // (otherwise the column reads "Unknown").
+      headers: {
+        // Header names are fixed by the OpenRouter API.
+        // eslint-disable-next-line ts/naming-convention
+        'HTTP-Referer': 'https://github.com/vizin4eg-dotcom/factorio-ai-engineer',
+        // eslint-disable-next-line ts/naming-convention
+        'X-Title': 'Factorio AI Engineer',
+      },
+      // OpenRouter routing. neuri.call() forwards only model/maxRoundTrip, but xsai
+      // spreads provider options into the request body (camelCase -> snake_case),
+      // so the top-level `provider` field must live here.
+      provider: {
+        order: ['Relace'],
+        // OpenRouter expects this field in snake_case.
+        // eslint-disable-next-line ts/naming-convention
+        allow_fallbacks: false,
+      },
+    } as Parameters<typeof composeAgent>[0]['provider'],
     tools: toolFunctions,
   })
 
@@ -39,19 +58,13 @@ export async function createMessageHandler() {
     if (message.type === 'chat') {
       let currentObservation = ''
       try {
-        const [scanRes, invRes, telemRes] = await Promise.all([
+        const [scanRes] = await Promise.all([
           v2FactorioConsoleCommandRawPost({
             body: { input: '/sc remote.call("autorio_tools", "scan_entities", 25, 1)' },
           }),
-          v2FactorioConsoleCommandRawPost({
-            body: { input: '/sc remote.call("autorio_tools", "get_inventory_items", 1)' },
-          }),
-          v2FactorioConsoleCommandRawPost({
-            body: { input: '/sc remote.call("autorio_tools", "get_base_telemetry", 1)' },
-          }),
         ])
 
-        currentObservation = `\n\n[Current Observation]:\nEntities & Player:\n${scanRes.data?.output || '{}'}\n\nInventory:\n${invRes.data?.output || '[]'}\n\nTelemetry:\n${telemRes.data?.output || '{}'}`
+        currentObservation = `\n\n[Current Observation]:\nPlayer & nearby entities:\n${scanRes.data?.output || '{}'}\n\n(Inventory, base footprint and base threats are NOT prefetched. Call getInventoryItems / getMainBaseFootprint / getMainBaseThreats / getBaseTelemetry only when the request actually needs them.)`
       }
       catch (err) {
         logger.withFields({ err }).warn('Failed to fetch automatic observation')
@@ -66,15 +79,31 @@ export async function createMessageHandler() {
       messages.push(user(`[MOD] All operations completed`))
     }
 
-	// Защита: отсекаем хвост модели при повторных попытках
+    // Защита: отсекаем хвост модели при повторных попытках
     while (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
       messages.pop()
     }
 
+    // Вызываем агента
     const response = await agent.call([...messages], {
-      model: openaiConfig.model || 'gemini-3.5-flash-lite',
-      maxRoundTrip: 3,
+      model: openaiConfig.model || DEFAULT_MODEL,
+      maxRoundTrip: 5,
     })
+
+    // Временная отладка: смотрим, что лежит в ответе агента
+    // console.log('[DEBUG_RESPONSE]', JSON.stringify(response, null, 2))
+
+    // Снимаем статистику токенов из ответа агента
+    if (response) {
+      // Провайдеры отдают usage в разных формах; neuri типизирует только snake_case.
+      const usage = response.usage as unknown as Record<string, number | undefined> | undefined
+      if (usage) {
+        tokenTracker.recordUsage({
+          promptTokens: usage.prompt_tokens ?? usage.promptTokens ?? usage.promptTokenCount,
+          completionTokens: usage.completion_tokens ?? usage.completionTokens ?? usage.candidatesTokenCount,
+        })
+      }
+    }
 
     if (!response) {
       logger.withFields({ response }).error('LLM responded with null')

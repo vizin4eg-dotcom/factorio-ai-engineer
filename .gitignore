@@ -83,6 +83,10 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+# any local env copy/backup (keep only the checked-in examples)
+.env.*
+!.env.example
+!**/.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -141,6 +145,3 @@ dist
 .pnp.*
 
 .pnpm-store/
-
-# AI & YOLO datasets
-models/factorio-yolo-v0/

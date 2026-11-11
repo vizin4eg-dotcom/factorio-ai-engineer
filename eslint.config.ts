@@ -38,24 +38,11 @@ export default antfu(
         },
       ],
     },
-    files: [
-      'packages/autorio/**/*.ts',
-      'packages/tstl-plugin-reload-factorio-mod/example/*.ts',
-      'packages/factorio-rcon-snippets-for-vscode/**/*.ts',
-    ],
+    files: ['packages/autorio/**/*.ts'],
   },
-  // #endregion
-  // #region no-console
+  // Vendored Go bridge: its TypeScript SDK is generated upstream, not our code.
   {
-    rules: {
-      'no-console': 'off',
-    },
-    files: ['packages/vscode-factorio-rcon-evaluator/**/*.ts'],
-  },
-  // #endregion
-  // #global-ignore
-  {
-    ignores: ['models/*', '**/.pixi'],
+    ignores: ['packages/factorio-rcon-api/**'],
   },
   // #endregion
 )
