@@ -659,8 +659,8 @@ function ____exports.new_task_manager(self)
         player_state.parameters_clear_base_threats = nil
         -- Сброс обхода препятствий: новая задача начинает с прямого курса.
         storage.stuck_dir_offset = nil
-        storage.stuck_free_ticks = 0
-        storage.last_pos = nil
+        storage.stuck_anchor = nil
+        storage.stuck_zero = 0
     end
 
     local function is_task_queue_empty(self)
@@ -3516,38 +3516,54 @@ script.on_event(defines.events.on_tick, function(unused_event)
     local bot = get_companion_body()
     if bot == nil or not bot.valid then return end
     
-	-- Детектор застревания: считаем тики без смещения и копим оффсет обхода.
-	-- Сам поворот применяется в конце тика (apply_stuck_offset), иначе state_*
-	-- затирает его направлением на цель в этом же тике.
-	if bot.walking_state.walking then
-		if not storage.last_pos then
-			storage.last_pos = {x = bot.position.x, y = bot.position.y, ticks_stuck = 0}
-			storage.stuck_free_ticks = 0
-		else
-			local move_dist_sq = (bot.position.x - storage.last_pos.x)^2 + (bot.position.y - storage.last_pos.y)^2
-			if move_dist_sq < 0.01 then
-				storage.last_pos.ticks_stuck = storage.last_pos.ticks_stuck + 1
-				storage.stuck_free_ticks = 0
-				-- Раз в 20 тиков на месте (треть секунды) доворачиваем на 45°.
-				if storage.last_pos.ticks_stuck >= 20 then
-					storage.last_pos.ticks_stuck = 0
+	-- Детектор застревания: смотрим смещение за 20 тиков, а не за один тик.
+	-- Иначе медленное скольжение вдоль стены считалось "стою на месте" и бот
+	-- докручивал направление каждые 20 тиков — со стороны это выглядело как
+	-- "воткнулся в стену и крутится".
+	if bot.walking_state and bot.walking_state.walking then
+		local ts = task_manager and task_manager.player_state and task_manager.player_state.task_state
+		local is_task_walk = ts == TaskStates.WALKING_DIRECT or ts == TaskStates.WALKING_TO_ENTITY
+		local pos = bot.position
+		local anchor = storage.stuck_anchor
+		if not anchor then
+			storage.stuck_anchor = {x = pos.x, y = pos.y, tick = game.tick}
+		elseif game.tick - anchor.tick >= 20 then
+			local dx = pos.x - anchor.x
+			local dy = pos.y - anchor.y
+			local moved = math.sqrt(dx * dx + dy * dy)
+			storage.stuck_anchor = {x = pos.x, y = pos.y, tick = game.tick}
+			if moved >= 2.5 then
+				-- Уверенно идём: обход больше не нужен, снова целимся прямо.
+				storage.stuck_dir_offset = 0
+				storage.stuck_zero = 0
+			elseif is_task_walk then
+				if moved < 0.3 then
+					-- Стоим намертво (стена/здание). Держим счётчик и через
+					-- секунду честно сдаёмся, вместо того чтобы крутиться.
+					storage.stuck_zero = (storage.stuck_zero or 0) + 20
+				else
+					storage.stuck_zero = 0
+				end
+				if (storage.stuck_zero or 0) >= 60 then
+					storage.stuck_zero = 0
+					storage.stuck_dir_offset = 0
+					log("[AUTORIO] [ERROR] movement blocked: companion is stuck, aborting task")
+					game.print("[AI Companion]: Застрял, не могу пройти.")
+					task_manager:reset_task_state()
+					task_manager:next_task()
+					return
+				end
+				if moved < 0.5 then
+					-- За 20 тиков почти не сдвинулись — доворачиваем на 45°.
 					storage.stuck_dir_offset = ((storage.stuck_dir_offset or 0) + 2) % 16
 				end
 			else
-				storage.last_pos.x = bot.position.x
-				storage.last_pos.y = bot.position.y
-				storage.last_pos.ticks_stuck = 0
-				storage.stuck_free_ticks = (storage.stuck_free_ticks or 0) + 1
-				-- Две секунды нормального хода — оффсет больше не нужен.
-				if storage.stuck_free_ticks >= 120 then
-					storage.stuck_dir_offset = 0
-					storage.stuck_free_ticks = 0
-				end
+				-- Не задача движения (follow/idle): оффсет не накапливаем.
+				storage.stuck_dir_offset = 0
 			end
 		end
 	else
-		storage.last_pos = nil
-		storage.stuck_free_ticks = 0
+		storage.stuck_anchor = nil
 	end
 	
     local riding_now = false
