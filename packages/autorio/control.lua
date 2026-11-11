@@ -2334,7 +2334,7 @@ end
 local function find_free_vehicle(bot, vehicle_name)
     local wanted = normalize_vehicle_name(vehicle_name)
     local names = wanted and {wanted} or {"car", "tank"}
-    local list = bot.surface.find_entities_filtered{position = bot.position, radius = 200, name = names}
+    local list = bot.surface.find_entities_filtered{position = bot.position, radius = 120, name = names}
     local best, best_d = nil, math.huge
     for _, v in ipairs(list) do
         if v.valid and v.force ~= game.forces.enemy and not occupied_by_other(v, bot) then
@@ -2448,8 +2448,8 @@ local function state_entering_vehicle(self, bot)
     end
     local vehicle = find_free_vehicle(bot, params.vehicle_name)
     if not vehicle then
-        log("[AUTORIO] [ERROR] enter_vehicle: no free " .. tostring(wanted or "car/tank") .. " within 200 tiles")
-        game.print("[AI Companion]: Не вижу свободный " .. tostring(wanted or "car/tank") .. " в радиусе 200.")
+        log("[AUTORIO] [ERROR] enter_vehicle: no free " .. tostring(wanted or "car/tank") .. " within 120 tiles")
+        game.print("[AI Companion]: Не вижу свободный " .. tostring(wanted or "tank/car") .. " в радиусе 120.")
         task_manager:reset_task_state(); task_manager:next_task(); return
     end
     try_enter_vehicle(bot, vehicle)
