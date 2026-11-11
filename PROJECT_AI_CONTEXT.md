@@ -58,7 +58,7 @@ Navigation: `walk_to(x, y)`, `walk_to_player()`, `walk_to_entity(name, radius)`,
 World: `mine_entity(name, count?)`, `place_entity(name, x, y, direction)`, `move_items(item, entity, max_count, to_entity, x, y)`, `build_ghosts(radius?, max_count?)`, `deconstruct_area(radius?)`, `craft_item(name, count)`, `wait(ticks)`.
 
 Body: `equip_armor(name?)`, `equip_module(name, count?)`, `remove_module(name, count?)`, `enter_vehicle(name?)`, `drive_to(x, y)`, `exit_vehicle()`, `attack_nearest_enemy(radius?)`.
-`equip_module` / `remove_module` are stubs in this bundle: `state_equipping_module` only reports `[ERROR]`. Port the upstream `c159853` implementation instead of inventing one.
+`equip_module` / `remove_module` are still stubs after the upstream merge: both this bundle and `origin/main` only queue `state_equipping_module` and print a message — nothing is actually equipped. Treat it as known debt, not as "port the upstream implementation".
 
 Advisor: `start_advisor()`, `stop_advisor()`, `factory_report()`. Lua counts and `game.print`s one line. The model does not invent rates and leaves `chatMessage` empty.
 
@@ -114,16 +114,16 @@ A one-tick remote call is fine when the work is "measure and place a layout". A 
 
 ## Git, as of this writing
 
-Local `HEAD` is `7935012` (2026-10-22). `origin/main` is `daf52a6` (2026-10-31), six commits ahead: `7b9eee0` (armor/vehicle calls), `a21e39c` (drive/follow loop), `c159853` (modules + tank), `c8cb064` (advisor), `2e82acd` (bare stop), `daf52a6` (scan/mine patch). The dirty working tree already contains hand-written versions of all of these, including `scan_patch`/`mine_patch`, plus the pathfinding-event fix and the `[ERROR]` channel, so it is not simply "behind". Do not `git pull` over it: `git diff origin/main -- packages/autorio/control.lua` first and merge by hand.
+Local `HEAD` is `44d99df` (2026-11-11), a merge of `origin/main` `daf52a6` into the hardened branch. Upstream already implemented armor/vehicle calls, the drive/follow loop, the factory advisor and `scan_patch`/`mine_patch`; the hand-edited bundle had its own versions plus the pathfinding-event fix, the `[ERROR]` channel, the single-craft flow and main-base defense. Conflicts were resolved by keeping the hardened behavior and taking upstream's vehicle search radius 120. Keep the bundle hand-edited; never rebuild it with `tstl`.
 
-Also dirty/staged: `prompt.md`, `tools.ts`, `message-handler.ts`, `README.ru.md`, untracked `metrics.ts` and this file. `start_all.ps1` no longer stores the RCON password or a LAN IP; both come from `packages/agent/.env.local` (`FACTORIO_RCON_PASSWORD`, `FACTORIO_RCON_HOST`). Do not put them back into the script or docs.
+The tree is clean as of `44d99df`; the previously dirty `prompt.md`, `tools.ts`, `message-handler.ts`, `metrics.ts` and this file are committed. `start_all.ps1` no longer stores the RCON password or a LAN IP; both come from `packages/agent/.env.local` (`FACTORIO_RCON_PASSWORD`, `FACTORIO_RCON_HOST`). Do not put them back into the script or docs.
 
 ## What changed locally on 2026-11-10
 
 - `walk_to_entity` had no `on_script_path_request_finished` handler, so it deadlocked the queue forever. The handler is back, and a 600-tick timeout covers a lost reply.
 - `CRAFTING` called `begin_crafting` twice (once in `next_task`, once in `state_crafting`), doubling the requested amount. Only `state_crafting` starts the craft now.
 - All aborting states emit `[AUTORIO] [ERROR]` (32 sites), so the agent can see failures it previously only heard about in-game.
-- `equip_module` is still a local stub (`state_equipping_module` reports `[ERROR]`); upstream `c159853` has the real implementation, so do not "fix" the stub — port the upstream one.
+- `equip_module` is still a stub: `state_equipping_module` only prints a message, and upstream is the same. Modules are not actually equipped yet; do not assume they are.
 
 ## What not to spend a session on
 
