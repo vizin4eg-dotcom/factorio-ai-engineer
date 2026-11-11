@@ -344,7 +344,7 @@ local function process_companion_defense(bot, tick)
     -- Безопасный сброс ходьбы: проверяем, доступен ли task_manager
     if task_manager and task_manager.player_state then
         local cur_state = task_manager.player_state.task_state
-        if storage.is_following and (cur_state == TaskStates.WALKING_TO_ENTITY or cur_state == TaskStates.WALKING_DIRECT) then
+        if storage.is_following and (cur_state == TaskStates.WALKING_TO_ENTITY or cur_state == TaskStates.WALKING_DIRECT or cur_state == TaskStates.WALKING_TO_POINT) then
             task_manager:reset_task_state()
         end
     end
@@ -506,6 +506,7 @@ ____exports.TaskStates.PICKING_UP = "picking_up"
 ____exports.TaskStates.CRAFTING = "crafting"
 ____exports.TaskStates.RESEARCHING = "researching"
 ____exports.TaskStates.WALKING_DIRECT = "walking_direct"
+____exports.TaskStates.WALKING_TO_POINT = "walking_to_point"
 ____exports.TaskStates.MOVING_ITEMS = "moving_items"
 ____exports.TaskStates.ATTACKING = "attacking"
 ____exports.TaskStates.WAITING = "waiting"
@@ -557,6 +558,9 @@ function ____exports.new_task_manager(self)
                 break
             elseif switch_state == TaskStates.WALKING_DIRECT then
                 player_state.parameters_walking_direct = task
+                break
+            elseif switch_state == TaskStates.WALKING_TO_POINT then
+                player_state.parameters_walk_to_point = task
                 break
             elseif switch_state == TaskStates.MINING then
                 player_state.parameters_mine_entity = task
@@ -642,6 +646,7 @@ function ____exports.new_task_manager(self)
         player_state.task_state = TaskStates.IDLE
         player_state.parameters_walk_to_entity = nil
         player_state.parameters_walking_direct = nil
+        player_state.parameters_walk_to_point = nil
         player_state.parameters_mine_entity = nil
         player_state.parameters_place_entity = nil
         player_state.parameters_move_items = nil
@@ -1196,7 +1201,7 @@ remote.add_interface(
         walk_to = function(x, y)
             local target = {x = tonumber(x), y = tonumber(y)}
             task_manager:add_task({
-                type = TaskStates.WALKING_DIRECT,
+                type = TaskStates.WALKING_TO_POINT,
                 target_position = target
             })
             log("[AUTORIO] Companion walk_to task: " .. serpent.line(target))
@@ -1620,11 +1625,12 @@ local function fallback_walk_direct(params)
     local goal = params.goal
     local state = task_manager and task_manager.player_state
     if not (goal and state) then return false end
-    local name = tostring(params.entity_name)
+    local label = params.entity_name and tostring(params.entity_name) or (tostring(math.floor(goal.x)) .. "," .. tostring(math.floor(goal.y)))
     state.parameters_walk_to_entity = nil
+    state.parameters_walk_to_point = nil
     state.task_state = TaskStates.WALKING_DIRECT
     state.parameters_walking_direct = {target_position = {x = goal.x, y = goal.y}}
-    log("[AUTORIO] walk_to_entity: no path to " .. name .. ", walking straight")
+    log("[AUTORIO] walk_to: no path to " .. label .. ", walking straight")
     return true
 end
 
@@ -1632,7 +1638,7 @@ end
 -- застревал в состоянии WALKING_TO_ENTITY и блокировал всю очередь задач.
 script.on_event(defines.events.on_script_path_request_finished, function(event)
     local state = task_manager and task_manager.player_state
-    local params = state and state.parameters_walk_to_entity
+    local params = state and (state.parameters_walk_to_entity or state.parameters_walk_to_point)
     if not params then return end
     if params.path_request_id and event.id and event.id ~= params.path_request_id then return end
 
@@ -1661,7 +1667,7 @@ script.on_event(defines.events.on_script_path_request_finished, function(event)
         params.path_index = 1
         params.path_retries = 0
         params.retry_at = nil
-        log("[AUTORIO] walk_to_entity: path received, waypoints " .. tostring(#event.path))
+        log("[AUTORIO] walk: path received, waypoints " .. tostring(#event.path))
     elseif fallback_walk_direct(params) then
         return
     else
@@ -2178,6 +2184,76 @@ local function state_moving_items(self, bot)
     bot.walking_state = {walking = false}
     task_manager:reset_task_state()
     task_manager:next_task()
+end
+
+-- Путь к произвольной точке для walk_to: тот же request_path, что у
+-- walk_to_entity. Возвращает true, если запрос ушёл.
+local function request_path_to_point(bot, target, params)
+    local bbox = {{-0.5, -0.5}, {0.5, 0.5}}
+    local cbox = bot.prototype and bot.prototype.collision_box
+    if cbox and cbox.left_top and cbox.right_bottom then
+        bbox = {{cbox.left_top.x, cbox.left_top.y}, {cbox.right_bottom.x, cbox.right_bottom.y}}
+    end
+    local start = bot.surface.find_non_colliding_position("character", bot.position, 10, 0.5, false)
+    if not start then return false end
+    local goal = bot.surface.find_non_colliding_position("character", target, 16, 0.5) or target
+    local collision_mask = {layers = {player = true, water_tile = true, object = true}, consider_tile_transitions = true}
+    local path_id = bot.surface.request_path({
+        bounding_box = bbox,
+        collision_mask = collision_mask,
+        radius = 2,
+        start = start,
+        goal = goal,
+        force = bot.force,
+        entity_to_ignore = bot,
+        pathfind_flags = {cache = false, no_break = true, prefer_straight_paths = false, allow_paths_through_own_entities = false}
+    })
+    if not path_id then return false end
+    params.calculating_path = true
+    params.path_request_id = path_id
+    params.path_request_tick = game.tick
+    params.goal = {x = goal.x, y = goal.y}
+    return true
+end
+
+local function state_walking_to_point(self, bot)
+    local params = task_manager.player_state.parameters_walk_to_point
+    if not params or not params.target_position then
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+    local target = params.target_position
+
+    if params.path then
+        if follow_path(nil, bot, params.path) then
+            bot.walking_state = {walking = false}
+            task_manager:reset_task_state()
+            task_manager:next_task()
+        end
+        return
+    end
+
+    if params.calculating_path then
+        if params.path_request_tick and game.tick - params.path_request_tick > 600 then
+            params.goal = params.goal or {x = target.x, y = target.y}
+            if not fallback_walk_direct(params) then
+                log("[AUTORIO] [ERROR] walk_to: no path reply in 10s to " .. tostring(math.floor(target.x)) .. "," .. tostring(math.floor(target.y)))
+                task_manager:reset_task_state()
+                task_manager:next_task()
+            end
+        end
+        return
+    end
+
+    if not request_path_to_point(bot, target, params) then
+        params.goal = {x = target.x, y = target.y}
+        if not fallback_walk_direct(params) then
+            log("[AUTORIO] [ERROR] walk_to: no free start tile near companion")
+            task_manager:reset_task_state()
+            task_manager:next_task()
+        end
+    end
 end
 
 local function state_walking_direct(self, bot)
@@ -3522,7 +3598,7 @@ script.on_event(defines.events.on_tick, function(unused_event)
 	-- "воткнулся в стену и крутится".
 	if bot.walking_state and bot.walking_state.walking then
 		local ts = task_manager and task_manager.player_state and task_manager.player_state.task_state
-		local is_task_walk = ts == TaskStates.WALKING_DIRECT or ts == TaskStates.WALKING_TO_ENTITY
+		local is_task_walk = ts == TaskStates.WALKING_DIRECT or ts == TaskStates.WALKING_TO_ENTITY or ts == TaskStates.WALKING_TO_POINT
 		local pos = bot.position
 		local anchor = storage.stuck_anchor
 		if not anchor then
@@ -3643,6 +3719,7 @@ script.on_event(defines.events.on_tick, function(unused_event)
     elseif state == TaskStates.BUILDING_GHOSTS then state_building_ghosts(nil, bot)
     elseif state == TaskStates.RESEARCHING then state_researching(nil, bot)
     elseif state == TaskStates.WALKING_DIRECT then state_walking_direct(nil, bot)
+    elseif state == TaskStates.WALKING_TO_POINT then state_walking_to_point(nil, bot)
     elseif state == TaskStates.ATTACKING then state_attacking(nil, bot)
     elseif state == TaskStates.WAITING then state_waiting(nil)
     elseif state == TaskStates.EQUIPPING_ARMOR then state_equipping_armor(nil, bot)
