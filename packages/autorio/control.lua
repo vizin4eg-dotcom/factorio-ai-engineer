@@ -1613,6 +1613,21 @@ remote.add_interface(
     }
 )
 
+-- Pathfinder иногда принципиально отказывает (рельсы/поезда, плотный лес),
+-- хотя персонаж физически может пройти. Тогда идём напрямую к точке у цели:
+-- state_walking_direct сам следит за прогрессом и выдаст [ERROR], если упрёмся.
+local function fallback_walk_direct(params)
+    local goal = params.goal
+    local state = task_manager and task_manager.player_state
+    if not (goal and state) then return false end
+    local name = tostring(params.entity_name)
+    state.parameters_walk_to_entity = nil
+    state.task_state = TaskStates.WALKING_DIRECT
+    state.parameters_walking_direct = {target_position = {x = goal.x, y = goal.y}}
+    log("[AUTORIO] walk_to_entity: no path to " .. name .. ", walking straight")
+    return true
+end
+
 -- Ответ планировщика путей: без этого обработчика walk_to_entity навсегда
 -- застревал в состоянии WALKING_TO_ENTITY и блокировал всю очередь задач.
 script.on_event(defines.events.on_script_path_request_finished, function(event)
@@ -1625,10 +1640,30 @@ script.on_event(defines.events.on_script_path_request_finished, function(event)
     params.path_request_id = nil
     params.path_request_tick = nil
 
+    -- Планировщик бывает занят и просит повторить позже: это не "пути нет".
+    -- Раньше такой ответ считался отказом, и walk_to_entity к зданиям падал зря.
+    if event.try_again_later then
+        params.path_retries = (params.path_retries or 0) + 1
+        if params.path_retries > 60 then
+            if fallback_walk_direct(params) then return end
+            log("[AUTORIO] [ERROR] walk_to_entity: pathfinder stayed busy for " .. tostring(params.entity_name))
+            game.print("[AI Companion]: Планировщик путей занят, не смог проложить путь к " .. tostring(params.entity_name) .. ".")
+            task_manager:reset_task_state()
+            task_manager:next_task()
+        else
+            params.retry_at = game.tick + 15
+        end
+        return
+    end
+
     if event.path and #event.path > 0 then
         params.path = event.path
         params.path_index = 1
+        params.path_retries = 0
+        params.retry_at = nil
         log("[AUTORIO] walk_to_entity: path received, waypoints " .. tostring(#event.path))
+    elseif fallback_walk_direct(params) then
+        return
     else
         log("[AUTORIO] [ERROR] walk_to_entity: no path to " .. tostring(params.entity_name))
         game.print("[AI Companion]: Путь к " .. tostring(params.entity_name) .. " не найден.")
@@ -1673,6 +1708,10 @@ end
 local function setup(self)
     get_companion_body()
     setup_complete = true
+    -- Компаньон не должен по умолчанию таскаться за игроком: follow — явная
+    -- команда и не переживает перезагрузку мода/сейва. Иначе после reload он
+    -- вечно бежит к игроку и путает любые задачи движения.
+    storage.is_following = false
     log("[AUTORIO] Setup complete with companion bot")
 end
 
@@ -1738,9 +1777,15 @@ local function state_walking_to_entity(self, bot)
         return
     end
     local nearest_entity = get_nearest_entity(nil, bot, entities)
-    if nearest_entity and not params.calculating_path then
+    if nearest_entity and not params.calculating_path and not (params.retry_at and game.tick < params.retry_at) then
         local bbox = {{-0.5, -0.5}, {0.5, 0.5}}
-        local start = bot.surface.find_non_colliding_position("iron-chest", bot.position, 10, 0.5, false)
+        -- Габарит пути должен совпадать с персонажем (0.4x0.4), иначе у сигналов
+        -- и зданий request_path отвечает "no path", хотя проход есть.
+        local cbox = bot.prototype and bot.prototype.collision_box
+        if cbox and cbox.left_top and cbox.right_bottom then
+            bbox = {{cbox.left_top.x, cbox.left_top.y}, {cbox.right_bottom.x, cbox.right_bottom.y}}
+        end
+        local start = bot.surface.find_non_colliding_position("character", bot.position, 10, 0.5, false)
         if not start then
             log("[AUTORIO] [ERROR] walk_to_entity: no free start tile near companion")
             game.print("[AI Companion]: Не могу сдвинуться с места, чтобы проложить путь.")
@@ -1748,13 +1793,18 @@ local function state_walking_to_entity(self, bot)
             task_manager:next_task()
             return
         end
-        local collision_mask = {layers = {player = true, train = true, water_tile = true, object = true}, consider_tile_transitions = true}
+        -- Цель — проходимая клетка рядом с объектом: центр робопорта/сундука
+        -- непроходим, и request_path на таком goal отвечает "no path".
+        local goal = bot.surface.find_non_colliding_position("character", nearest_entity.position, 32, 0.5) or nearest_entity.position
+        -- Без "train": рельсы лежат на этом слое, и pathfinder отказывался вести
+        -- путь через железную дорогу, хотя персонаж спокойно перешагивает рельсы.
+        local collision_mask = {layers = {player = true, water_tile = true, object = true}, consider_tile_transitions = true}
         local path_id = bot.surface.request_path({
             bounding_box = bbox,
             collision_mask = collision_mask,
             radius = 2,
             start = start,
-            goal = nearest_entity.position,
+            goal = goal,
             force = bot.force,
             entity_to_ignore = bot,
             pathfind_flags = {cache = false, no_break = true, prefer_straight_paths = false, allow_paths_through_own_entities = false}
@@ -1762,6 +1812,7 @@ local function state_walking_to_entity(self, bot)
         params.calculating_path = true
         params.path_request_id = path_id
         params.path_request_tick = game.tick
+        params.goal = {x = goal.x, y = goal.y}
         params.target_position = nearest_entity.position
     end
 end
