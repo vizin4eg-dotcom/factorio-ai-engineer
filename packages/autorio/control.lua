@@ -781,72 +781,6 @@ local function personal_logistics_clear_request(bot, item_name)
     return true, nil, removed
 end
 
--- The engine stores personal logistic filters for a non-player character but
--- never services them: that behavior belongs to LuaPlayer. The mod therefore
--- moves the items itself through the logistic network the companion stands in:
--- a request pulls from the network, auto-trash pushes back, and the character
--- trash inventory is flushed into the network too.
-local function personal_logistics_supply(bot)
-    if not (bot and bot.valid) then return end
-    local inventory = bot.get_main_inventory()
-    if not inventory then return end
-    local network = bot.surface.find_logistic_network_by_position(bot.position, bot.force)
-    if not network then return end
-    local point = personal_logistics_point(bot)
-    local supplied, trashed = 0, 0
-
-    if point then
-        for _, request in ipairs(personal_logistics_requests(point)) do
-            local item = request.item
-            local have = inventory.get_item_count(item)
-            local minimum = tonumber(request.min) or 0
-            local maximum = tonumber(request.max)
-            if have < minimum then
-                local wanted = minimum - have
-                local available = network.get_item_count(item)
-                if available > 0 then
-                    local taken = tonumber(network.remove_item{name = item, count = math.min(wanted, available)}) or 0
-                    if taken > 0 then
-                        local inserted = tonumber(inventory.insert{name = item, count = taken}) or 0
-                        if inserted < taken then
-                            network.insert{name = item, count = taken - inserted}
-                        end
-                        supplied = supplied + inserted
-                    end
-                end
-            elseif maximum and have > maximum then
-                local excess = have - maximum
-                local removed = tonumber(inventory.remove{name = item, count = excess}) or 0
-                if removed > 0 then
-                    local inserted = tonumber(network.insert{name = item, count = removed}) or 0
-                    if inserted < removed then
-                        inventory.insert{name = item, count = removed - inserted}
-                    end
-                    trashed = trashed + inserted
-                end
-            end
-        end
-    end
-
-    local trash = bot.get_inventory(defines.inventory.character_trash)
-    if trash and not trash.is_empty() then
-        for _, stack in ipairs(trash.get_contents()) do
-            local removed = tonumber(trash.remove{name = stack.name, count = stack.count}) or 0
-            if removed > 0 then
-                local inserted = tonumber(network.insert{name = stack.name, count = removed}) or 0
-                if inserted < removed then
-                    trash.insert{name = stack.name, count = removed - inserted}
-                end
-                trashed = trashed + inserted
-            end
-        end
-    end
-
-    if supplied > 0 or trashed > 0 then
-        log("[AUTORIO] Personal logistics: supplied " .. tostring(supplied) .. ", trashed " .. tostring(trashed))
-    end
-end
-
 local function require(file, ...)
     if ____moduleCache[file] then
         return ____moduleCache[file].value
@@ -4122,13 +4056,6 @@ script.on_event(defines.events.on_tick, function(unused_event)
 
     local bot = get_companion_body()
     if bot == nil or not bot.valid then return end
-
-    -- Personal logistics: the engine only services requests for LuaPlayer, so
-    -- the mod reconciles the companion requests against the network itself.
-    if not storage.next_logistics_tick or game.tick >= storage.next_logistics_tick then
-        storage.next_logistics_tick = game.tick + 60
-        personal_logistics_supply(bot)
-    end
     
 	-- Детектор застревания: смотрим смещение за 20 тиков, а не за один тик.
 	-- Иначе медленное скольжение вдоль стены считалось "стою на месте" и бот

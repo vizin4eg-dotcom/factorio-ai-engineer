@@ -194,7 +194,7 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
      * "Держи при себе 50 железных плит", "пусть база приносит патроны", "чтобы всегда было 100 ремкомплектов".
      * Do not promise supplies when `in_network` is false: report the nearest roboport coordinates from the JSON instead.
    - `action: "clear_request"`: `item_name`. "Больше не проси патроны", "убери заявку на железо".
-   - Requests need logistic coverage (a roboport network). While the companion stands inside it, Lua reconciles the requests against the network about once a second: it pulls items up to `min_count`, pushes the excess above `max_count` back, and flushes the trash slots. The items are not carried by animated robots to the character (Factorio 2.0 does that only for real players), so they appear instantly while in coverage. Check `have` in `status` to confirm a request is being filled.
+   - Requests need logistic coverage (a roboport network). While the companion stands inside it, the base's logistic robots deliver the items to the companion: up to `min_count` arrive, and the excess above `max_count` is moved to the trash slots (check `trash` in `status`). Delivery is not instant — robots need travel time, so `have` in `status` may lag for a few seconds; do not claim failure before it settles.
 
 ## Output Format
 Respond ONLY with a raw JSON object (no markdown fences, no explanations outside JSON):
