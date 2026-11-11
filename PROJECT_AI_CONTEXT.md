@@ -125,6 +125,13 @@ The tree is clean as of `44d99df`; the previously dirty `prompt.md`, `tools.ts`,
 - All aborting states emit `[AUTORIO] [ERROR]` (32 sites), so the agent can see failures it previously only heard about in-game.
 - `equip_module` is still a stub: `state_equipping_module` only prints a message, and upstream is the same. Modules are not actually equipped yet; do not assume they are.
 
+## What changed locally on 2026-11-11
+
+- The anti-stuck code in `on_tick` was dead: `state_walking_direct` (and every other state) re-aimed `walking_state` at the target in the same tick, overwriting the rotation. It now only accumulates `storage.stuck_dir_offset`; `apply_stuck_offset(bot)` runs after the state dispatch (and in the follow branch), so the 45° detour survives. The offset decays after two seconds of real movement and is cleared by `reset_task_state`.
+- `walk_to` has a no-progress timeout: if the distance to the target does not shrink for 20 s, it logs one `[AUTORIO] [ERROR] walk_to: no progress ...` line, prints to the player, and advances the queue. Verified live: the companion was previously stuck on a tree forever; with the fix it walks around, and it aborts cleanly on a roboport centre.
+- `walk_to_entity` still sends `goal = entity.position`, so multi-tile buildings (roboport, chest, drill) answer "no path" — the pathfinder wants a walkable goal. Small entities (a tree) work. Not fixed yet.
+- Live verification 2026-11-11: tree detour + arrival, 20 s stall abort with the queue moving on to `craft_item`, and `walk_to_entity("tree")` path reply, all against `packages/autorio/control.lua` synced by `sync_mod.ps1`.
+
 ## What not to spend a session on
 
 - More verbs (another vehicle, another equipment slot, another chat synonym). Follow, tank, armor grid, and advisor already exist.

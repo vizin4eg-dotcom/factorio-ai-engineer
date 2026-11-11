@@ -657,6 +657,10 @@ function ____exports.new_task_manager(self)
         player_state.parameters_build_patch = nil
         player_state.parameters_build_ghosts = nil
         player_state.parameters_clear_base_threats = nil
+        -- Сброс обхода препятствий: новая задача начинает с прямого курса.
+        storage.stuck_dir_offset = nil
+        storage.stuck_free_ticks = 0
+        storage.last_pos = nil
     end
 
     local function is_task_queue_empty(self)
@@ -1642,6 +1646,16 @@ local function get_direction(self, start_position, end_position)
     return (math.floor(dir / 2 + 0.5) * 2) % 16
 end
 
+-- Обход препятствий: state_* каждый тик заново целятся в цель, поэтому поворот,
+-- сделанный анти-застреванием, нужно применять уже после них, иначе он
+-- затирается в том же тике (из-за этого бот раньше "бежал" в стену вечно).
+local function apply_stuck_offset(bot)
+    local off = storage.stuck_dir_offset
+    if off and off ~= 0 and bot and bot.valid and bot.walking_state and bot.walking_state.walking then
+        bot.walking_state = {walking = true, direction = (bot.walking_state.direction + off) % 16}
+    end
+end
+
 local function get_nearest_entity(self, bot, entities)
     local min_distance = math.huge
     local nearest_entity = nil
@@ -2124,10 +2138,34 @@ local function state_walking_direct(self, bot)
     end
 
     local target = params.target_position
+    local dist_sq = (target.x - bot.position.x) ^ 2 + (target.y - bot.position.y) ^ 2
+
+    -- Страховка от вечного deadlock: если 20 секунд нет прогресса по дистанции,
+    -- сдаёмся с [ERROR], чтобы очередь задач не встала навсегда.
+    local progress = params.progress
+    if not progress then
+        progress = {best_dist_sq = dist_sq, stall_ticks = 0}
+        params.progress = progress
+    end
+    if dist_sq < progress.best_dist_sq - 1.0 then
+        progress.best_dist_sq = dist_sq
+        progress.stall_ticks = 0
+    else
+        progress.stall_ticks = progress.stall_ticks + 1
+    end
+    if progress.stall_ticks > 1200 then
+        bot.walking_state = {walking = false}
+        log("[AUTORIO] [ERROR] walk_to: no progress toward " .. tostring(math.floor(target.x)) .. "," .. tostring(math.floor(target.y)) .. " for 20s, aborting")
+        game.print("[AI Companion]: Не могу дойти до " .. tostring(math.floor(target.x)) .. "," .. tostring(math.floor(target.y)) .. " — застрял.")
+        task_manager:reset_task_state()
+        task_manager:next_task()
+        return
+    end
+
     local dir = get_direction(nil, bot.position, target)
     bot.walking_state = {walking = true, direction = dir}
 
-    if (target.x - bot.position.x) ^ 2 + (target.y - bot.position.y) ^ 2 < 1.0 then
+    if dist_sq < 1.0 then
         bot.walking_state = {walking = false}
         task_manager:reset_task_state()
         task_manager:next_task()
@@ -3427,30 +3465,38 @@ script.on_event(defines.events.on_tick, function(unused_event)
     local bot = get_companion_body()
     if bot == nil or not bot.valid then return end
     
+	-- Детектор застревания: считаем тики без смещения и копим оффсет обхода.
+	-- Сам поворот применяется в конце тика (apply_stuck_offset), иначе state_*
+	-- затирает его направлением на цель в этом же тике.
 	if bot.walking_state.walking then
-    if not storage.last_pos then
-        storage.last_pos = {x = bot.position.x, y = bot.position.y, ticks_stuck = 0}
-    else
-        local move_dist_sq = (bot.position.x - storage.last_pos.x)^2 + (bot.position.y - storage.last_pos.y)^2
-        if move_dist_sq < 0.01 then
-            storage.last_pos.ticks_stuck = storage.last_pos.ticks_stuck + 1
-        else
-            storage.last_pos.x = bot.position.x
-            storage.last_pos.y = bot.position.y
-            storage.last_pos.ticks_stuck = 0
-        end
-
-        -- Если уперся и бежит на месте больше 20 тиков (треть секунды)
-        if storage.last_pos.ticks_stuck > 20 then
-            -- Сдвигаем направление по часовой стрелке, пытаясь обойти угол
-            bot.walking_state = {
-                walking = true, 
-                direction = (bot.walking_state.direction + 2) % 16
-            }
-        end
-	end
+		if not storage.last_pos then
+			storage.last_pos = {x = bot.position.x, y = bot.position.y, ticks_stuck = 0}
+			storage.stuck_free_ticks = 0
+		else
+			local move_dist_sq = (bot.position.x - storage.last_pos.x)^2 + (bot.position.y - storage.last_pos.y)^2
+			if move_dist_sq < 0.01 then
+				storage.last_pos.ticks_stuck = storage.last_pos.ticks_stuck + 1
+				storage.stuck_free_ticks = 0
+				-- Раз в 20 тиков на месте (треть секунды) доворачиваем на 45°.
+				if storage.last_pos.ticks_stuck >= 20 then
+					storage.last_pos.ticks_stuck = 0
+					storage.stuck_dir_offset = ((storage.stuck_dir_offset or 0) + 2) % 16
+				end
+			else
+				storage.last_pos.x = bot.position.x
+				storage.last_pos.y = bot.position.y
+				storage.last_pos.ticks_stuck = 0
+				storage.stuck_free_ticks = (storage.stuck_free_ticks or 0) + 1
+				-- Две секунды нормального хода — оффсет больше не нужен.
+				if storage.stuck_free_ticks >= 120 then
+					storage.stuck_dir_offset = 0
+					storage.stuck_free_ticks = 0
+				end
+			end
+		end
 	else
 		storage.last_pos = nil
+		storage.stuck_free_ticks = 0
 	end
 	
     local riding_now = false
@@ -3519,6 +3565,7 @@ script.on_event(defines.events.on_tick, function(unused_event)
                 end
             end
         end
+        apply_stuck_offset(bot)
         return
     end
 
@@ -3540,6 +3587,7 @@ script.on_event(defines.events.on_tick, function(unused_event)
     elseif state == TaskStates.CLEARING_BASE_THREATS then state_clearing_base_threats(nil, bot)
     elseif state == TaskStates.CRAFTING then state_crafting(nil, bot)
     end
+    apply_stuck_offset(bot)
 end)
 
 script.on_event(defines.events.on_entity_damaged, function(event)
