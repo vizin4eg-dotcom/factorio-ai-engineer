@@ -74,5 +74,10 @@ export function initEnv() {
   wsClientConfig.wsHost = env.FACTORIO_WS_HOST || 'localhost'
   wsClientConfig.wsPort = Number.parseInt(env.FACTORIO_WS_PORT || '8080')
 
-  logger.withFields({ openaiConfig }).log('Environment variables initialized')
+  // Never log the API key: logger output goes to the console and log files.
+  logger.withFields({
+    model: openaiConfig.model,
+    baseUrl: openaiConfig.baseUrl,
+    providerOrder: openaiConfig.providerOrder,
+  }).log('Environment variables initialized')
 }
