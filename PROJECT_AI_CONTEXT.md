@@ -103,7 +103,7 @@ Consequences:
 - `messages` grows without bound. A long session will drown the prompt.
 - Tool round-trips (`maxRoundTrip: 3`) and `operationCommands` are two action channels. The prompt already says "do not also call a tool for the same action". Prefer not exposing the action as a tool at all.
 - `getRecipe` and `scanEntities` in `tools.ts` used to destructure `{ parameters }` while the schema is flat. Fixed: every tool now reads top-level fields (`item`, `radius`). Keep new tools on the flat schema.
-- Model id has one source of truth: `DEFAULT_MODEL` in `config.ts` (`deepseek/deepseek-v4.1-flash-1017`), overridden by `OPENAI_MODEL_NAME`. OpenRouter provider routing (`provider.order`, `allow_fallbacks`) lives in the `composeAgent` provider options, because `neuri.call()` forwards only `model` and `maxRoundTrip`.
+- Model id has one source of truth: `DEFAULT_MODEL` in `config.ts` (`deepseek/deepseek-v4.1-flash-1017`), overridden by `OPENAI_MODEL_NAME`. OpenRouter provider routing (`provider.order`, `allow_fallbacks`) lives in the `composeAgent` provider options, because `neuri.call()` forwards only `model` and `maxRoundTrip`. `provider.order` is no longer hardcoded: `OPENROUTER_PROVIDER_ORDER` (comma-separated or a JSON array, parsed by `parseProviderOrder`) sets it, and an empty value sends no override so OpenRouter routes normally. Put the local value in `packages/agent/.env` (gitignored), never in `message-handler.ts`.
 
 ## How to add a behavior
 

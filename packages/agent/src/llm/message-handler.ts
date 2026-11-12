@@ -41,7 +41,9 @@ export async function createMessageHandler() {
       // spreads provider options into the request body (camelCase -> snake_case),
       // so the top-level `provider` field must live here.
       provider: {
-        order: ['Relace'],
+        // Provider routing comes from OPENROUTER_PROVIDER_ORDER so switching a
+        // provider never needs a source edit. Unset => OpenRouter default routing.
+        ...(openaiConfig.providerOrder?.length ? { order: openaiConfig.providerOrder } : {}),
         // OpenRouter expects this field in snake_case.
         // eslint-disable-next-line ts/naming-convention
         allow_fallbacks: false,
