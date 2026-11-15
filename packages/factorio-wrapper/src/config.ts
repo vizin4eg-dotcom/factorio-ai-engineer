@@ -29,5 +29,11 @@ export function initEnv() {
   wsServerConfig.host = env.WS_SERVER_HOST || 'localhost'
   wsServerConfig.port = Number.parseInt(env.WS_SERVER_PORT || '8080')
 
-  logger.withFields({ factorioConfig }).log('Environment variables initialized')
+  // Never log the RCON password: the wrapper console output is user visible.
+  logger.withFields({
+    path: factorioConfig.path,
+    savePath: factorioConfig.savePath,
+    serverSettingsPath: factorioConfig.serverSettingsPath,
+    rconPort: factorioConfig.rconPort,
+  }).log('Environment variables initialized')
 }
