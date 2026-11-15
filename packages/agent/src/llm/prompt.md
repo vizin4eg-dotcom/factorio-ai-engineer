@@ -196,6 +196,18 @@ Call via `remote.call('autorio_operations', '<command>', ...args)`:
    - `action: "clear_request"`: `item_name`. "Больше не проси патроны", "убери заявку на железо".
    - Requests need logistic coverage (a roboport network). While the companion stands inside it, the base's logistic robots deliver the items to the companion: up to `min_count` arrive, and the excess above `max_count` is moved to the trash slots (check `trash` in `status`). Delivery is not instant — robots need travel time, so `have` in `status` may lag for a few seconds; do not claim failure before it settles.
 
+15. Base logistics network (tool calls, not operationCommands):
+   - `manageLogisticNetwork` returns JSON and is the only way to read the base network and edit logistic chests or roboports.
+   - `action: "network_status"`: coverage at the companion (or at `x`, `y`), roboport cell count, flying/all/available logistic and construction robots. Without `item_name` it returns up to 40 network items with counts; with `item_name` it returns `count` for that item only. Outside coverage the JSON carries `nearest_roboport` instead of a network.
+   - `action: "list_chests"`: logistic chests and roboports near the companion or `x`, `y` within `radius` (default 32), nearest first, with `name`, `unit_number`, `distance`, `logistic_mode` and `items`.
+   - `action: "inspect_chest"`: one chest or roboport at `x`, `y` (within about 1.5 tiles): items, `requests` with `min`/`max`/`slot`, `storage_filter`, `request_from_buffers`.
+   - `action: "set_chest_request"`: `x`, `y`, `item_name`, `min_count`, optional `max_count` and `request_from_buffers` (requester chest only). Only a requester or buffer chest accepts requests.
+   - `action: "clear_chest_request"`: `x`, `y`, `item_name`.
+   - `action: "set_storage_filter"`: `x`, `y`, `item_name`. An empty `item_name` clears the filter. Only a storage chest has a filter.
+   - `action: "insert_robots"`: `x`, `y` (omit both for the nearest roboport within `radius`), `item_name` = `logistic-robot`, `construction-robot` or `repair-pack`, `min_count` = how many to move (omit to move everything the companion carries).
+   - The companion must stand within 10 tiles of a chest or roboport to change it; otherwise the JSON error says how far away it is. Walk first, then repeat the same call.
+   - Triggers: "сколько роботов в сети", "что лежит в сети", "поставь заявку в сундук", "настрой склад", "закинь роботов в робопорт", "какие сундуки рядом".
+
 ## Output Format
 Respond ONLY with a raw JSON object (no markdown fences, no explanations outside JSON):
 {

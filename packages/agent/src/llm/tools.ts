@@ -179,6 +179,47 @@ export const tools: ToolFunction[] = [
     },
   },
   {
+    name: 'manageLogisticNetwork',
+    description: 'Inspect the base logistic network and its logistic chests/roboports, edit requester or buffer chest requests, set a storage-chest filter, and seed a roboport with robots or repair packs. Changing a chest or roboport needs the companion within 10 tiles. Returns JSON.',
+    schema: z.object({
+      action: z.enum([
+        'network_status',
+        'list_chests',
+        'inspect_chest',
+        'set_chest_request',
+        'clear_chest_request',
+        'set_storage_filter',
+        'insert_robots',
+      ]).describe('network_status = coverage, robot counts and contents; list_chests = logistic chests and roboports nearby; inspect_chest = one chest or roboport; set_chest_request/clear_chest_request = requester or buffer chest slots; set_storage_filter = storage chest filter; insert_robots = move robots or repair packs into a roboport.'),
+      x: z.number().optional().describe('Target chest/roboport X, or scan center X. Omit to use the companion position.'),
+      y: z.number().optional().describe('Target chest/roboport Y, or scan center Y. Omit to use the companion position.'),
+      radius: z.number().optional().describe('Scan radius in tiles for list_chests and network_status fallback. Defaults to 32.'),
+      // eslint-disable-next-line ts/naming-convention
+      item_name: z.string().optional().describe('Item name for network_status/set_chest_request/clear_chest_request/set_storage_filter, or logistic-robot/construction-robot/repair-pack for insert_robots.'),
+      // eslint-disable-next-line ts/naming-convention
+      min_count: z.number().optional().describe('Minimum request count, or how many robots/repair packs to insert.'),
+      // eslint-disable-next-line ts/naming-convention
+      max_count: z.number().optional().describe('Maximum request count for a requester or buffer chest. Omit for no maximum.'),
+      // eslint-disable-next-line ts/naming-convention
+      request_from_buffers: z.boolean().optional().describe('Requester chest only: also draw from buffer chests.'),
+    }),
+    fn: async (args: any) => {
+      const what = String(args.action ?? 'network_status').replace(/["\\]/g, '')
+      const item = String(args.item_name ?? '').replace(/["\\]/g, '')
+      const xArg = args.x === undefined ? 'nil' : String(Number(args.x))
+      const yArg = args.y === undefined ? 'nil' : String(Number(args.y))
+      const radiusArg = args.radius === undefined ? '32' : String(Number(args.radius))
+      const minArg = args.min_count === undefined ? 'nil' : String(Math.trunc(Number(args.min_count)))
+      const maxArg = args.max_count === undefined ? 'nil' : String(Math.trunc(Number(args.max_count)))
+      const buffersArg = args.request_from_buffers === undefined ? '""' : (args.request_from_buffers ? 'true' : 'false')
+      logger.withFields({ action: what, item, x: xArg, y: yArg, radius: radiusArg }).debug('Managing base logistics')
+      const response = await v2FactorioConsoleCommandRawPost({
+        body: { input: `/sc remote.call("autorio_tools", "manage_logistic_network", "${what}", ${xArg}, ${yArg}, ${radiusArg}, "${item}", ${minArg}, ${maxArg}, ${buffersArg})` },
+      })
+      return response.data?.output || '{"ok":false,"error":"no output"}'
+    },
+  },
+  {
     name: 'enterVehicle',
     description: 'Walk to a free car or tank and become the driver. Does not steal an occupied vehicle. Loads fuel from the companion inventory if the vehicle is empty.',
     schema: z.object({

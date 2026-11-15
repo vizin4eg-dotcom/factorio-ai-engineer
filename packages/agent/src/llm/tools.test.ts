@@ -65,6 +65,52 @@ describe('tool schemas', () => {
     ])
   })
 
+  it('exposes base logistic network management with the documented actions', () => {
+    const network = tools.find(tool => tool.name === 'manageLogisticNetwork')
+    expect(network, 'manageLogisticNetwork tool is missing').toBeDefined()
+    const shape = (network!.schema as z.ZodObject<any>).shape
+    expect(enumOptions(shape.action)).toEqual([
+      'network_status',
+      'list_chests',
+      'inspect_chest',
+      'set_chest_request',
+      'clear_chest_request',
+      'set_storage_filter',
+      'insert_robots',
+    ])
+    expect(Object.keys(shape).sort()).toEqual([
+      'action',
+      'item_name',
+      'max_count',
+      'min_count',
+      'radius',
+      'request_from_buffers',
+      'x',
+      'y',
+    ])
+  })
+
+  it('accepts flat arguments for base logistic network edits', () => {
+    const network = tools.find(tool => tool.name === 'manageLogisticNetwork')!
+    expect(network.schema.parse({
+      action: 'set_chest_request',
+      x: 10,
+      y: -20,
+      item_name: 'iron-plate',
+      min_count: 50,
+      max_count: 200,
+      request_from_buffers: true,
+    })).toEqual({
+      action: 'set_chest_request',
+      x: 10,
+      y: -20,
+      item_name: 'iron-plate',
+      min_count: 50,
+      max_count: 200,
+      request_from_buffers: true,
+    })
+  })
+
   it('accepts flat arguments for the new tools', () => {
     const armor = tools.find(tool => tool.name === 'manageArmorGrid')!
     expect(armor.schema.parse({ action: 'equip', equipment_name: 'solar-panel', count: 2 })).toEqual({

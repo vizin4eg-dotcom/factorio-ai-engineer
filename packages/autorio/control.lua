@@ -548,9 +548,9 @@ local function equipment_grid_equip(bot, raw_name, count, x, y)
     local position_y = tonumber(y)
     local placed = 0
     local last_error = nil
-    for _ = 1, wanted do
+    for index = 1, wanted do
         local position = nil
-        if position_x ~= nil and position_y ~= nil then
+        if index == 1 and position_x ~= nil and position_y ~= nil then
             position = {x = position_x, y = position_y}
         end
         local ok, equipment = pcall(function() return grid.put{name = name, position = position} end)
@@ -779,6 +779,536 @@ local function personal_logistics_clear_request(bot, item_name)
     end
     if removed == 0 then return false, "no personal request for '" .. item .. "'" end
     return true, nil, removed
+end
+
+--[[ Stationary base logistics (Factorio 2.0).
+     Read a logistic network, its chests and roboports, edit requester/buffer
+     requests, set the storage-chest filter and seed a roboport with robots or
+     repair packs from the companion inventory. Every action is a one-tick
+     tool: it reads or edits entities in place and never queues a task.
+     Changing a chest or roboport requires the companion within
+     LOGISTIC_ACTION_RANGE tiles, the same convention as move_items. ]]
+local LOGISTIC_ACTION_RANGE = 10
+
+local LOGISTIC_ROBOT_INVENTORIES = {
+    ["logistic-robot"] = defines.inventory.roboport_robot,
+    ["construction-robot"] = defines.inventory.roboport_robot,
+    ["repair-pack"] = defines.inventory.roboport_material
+}
+
+local function logistic_trim(value)
+    local text = tostring(value or "")
+    return (text:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function logistic_distance(a, b)
+    local dx = a.x - b.x
+    local dy = a.y - b.y
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+local function logistic_target_position(bot, x, y)
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x ~= nil and position_y ~= nil then
+        return {x = position_x, y = position_y}
+    end
+    return {x = bot.position.x, y = bot.position.y}
+end
+
+local function logistic_range_error(bot, position)
+    local distance = logistic_distance(bot.position, position)
+    if distance > LOGISTIC_ACTION_RANGE then
+        return string.format(
+            "target is %.1f tiles away, the companion must stand within %d tiles",
+            distance,
+            LOGISTIC_ACTION_RANGE
+        )
+    end
+    return nil
+end
+
+local function logistic_find_entity(bot, position, entity_types, tolerance)
+    local entities = bot.surface.find_entities_filtered{
+        position = position,
+        radius = tolerance or 1.5,
+        type = entity_types,
+        force = bot.force
+    }
+    local best = nil
+    local best_distance = nil
+    for _, entity in ipairs(entities) do
+        if entity.valid then
+            local distance = logistic_distance(position, entity.position)
+            if not best_distance or distance < best_distance then
+                best = entity
+                best_distance = distance
+            end
+        end
+    end
+    return best, best_distance
+end
+
+local function logistic_contents(raw)
+    local items = {}
+    if not raw then return items end
+    if raw[1] ~= nil then
+        for _, entry in ipairs(raw) do
+            if type(entry) == "table" and entry.name then
+                items[#items + 1] = {
+                    name = entry.name,
+                    count = entry.count or 0,
+                    quality = entry.quality or "normal"
+                }
+            end
+        end
+    else
+        for name, count in pairs(raw) do
+            if type(name) == "string" and type(count) == "number" then
+                items[#items + 1] = {name = name, count = count, quality = "normal"}
+            end
+        end
+    end
+    table.sort(items, function(a, b) return a.count > b.count end)
+    return items
+end
+
+local function logistic_entity_contents(entity)
+    local items = {}
+    if entity.type == "roboport" then
+        for _, index in ipairs({defines.inventory.roboport_robot, defines.inventory.roboport_material}) do
+            local inventory = entity.get_inventory(index)
+            if inventory then
+                for _, entry in ipairs(logistic_contents(inventory.get_contents())) do
+                    items[#items + 1] = entry
+                end
+            end
+        end
+        table.sort(items, function(a, b) return a.count > b.count end)
+        return items
+    end
+    local ok, inventory = pcall(function() return entity.get_inventory(defines.inventory.chest) end)
+    if not (ok and inventory) then return items end
+    return logistic_contents(inventory.get_contents())
+end
+
+local function logistic_requester_point(entity)
+    local ok, point = pcall(function() return entity.get_requester_point() end)
+    if not ok or not point then return nil, "this entity has no requester point" end
+    return point, nil
+end
+
+local function logistic_requester_section(point)
+    if point.sections_count == 0 then
+        local added = point.add_section()
+        if not added then return nil, "cannot create a request section" end
+    end
+    local ok, section = pcall(function() return point.get_section(1) end)
+    if not ok or not section then return nil, "the request section is unavailable" end
+    return section, nil
+end
+
+local function logistic_point_requests(entity)
+    local requests = {}
+    local point = logistic_requester_point(entity)
+    if not point then return requests end
+    for section_index = 1, point.sections_count do
+        local ok, section = pcall(function() return point.get_section(section_index) end)
+        if ok and section then
+            local filters = section.filters
+            for slot = 1, #filters do
+                local filter = filters[slot]
+                if filter and filter.value then
+                    requests[#requests + 1] = {
+                        item = filter.value.name,
+                        min = filter.min or 0,
+                        max = filter.max,
+                        section = section_index,
+                        slot = slot
+                    }
+                end
+            end
+        end
+    end
+    return requests
+end
+
+local function logistic_parse_boolean(value)
+    if value == nil or value == "" then return nil end
+    if value == true or value == "true" or value == 1 or value == "1" then return true end
+    if value == false or value == "false" or value == 0 or value == "0" then return false end
+    return nil
+end
+
+local function logistic_network_status(bot, x, y, item_name, radius)
+    local position = logistic_target_position(bot, x, y)
+    local result = {
+        ok = true,
+        in_coverage = false,
+        position = {x = math.floor(position.x * 10) / 10, y = math.floor(position.y * 10) / 10}
+    }
+    local network = bot.surface.find_logistic_network_by_position(position, bot.force)
+    if not network then
+        local roboports = bot.surface.find_entities_filtered{
+            type = "roboport",
+            position = position,
+            radius = radius,
+            force = bot.force
+        }
+        local nearest = nil
+        local nearest_distance = nil
+        for _, roboport in ipairs(roboports) do
+            if roboport.valid then
+                local distance = logistic_distance(position, roboport.position)
+                if not nearest_distance or distance < nearest_distance then
+                    nearest = roboport
+                    nearest_distance = distance
+                end
+            end
+        end
+        if nearest then
+            result.nearest_roboport = {
+                x = math.floor(nearest.position.x * 10) / 10,
+                y = math.floor(nearest.position.y * 10) / 10,
+                distance = math.floor(nearest_distance)
+            }
+            network = bot.surface.find_logistic_network_by_position(nearest.position, bot.force)
+        end
+    end
+    if not network then
+        result.ok = false
+        result.error = "no logistic network covers this position and no roboport is within "
+            .. tostring(radius) .. " tiles"
+        return result
+    end
+    result.in_coverage = true
+    result.network = {
+        cells = #network.cells,
+        robots_flying = #network.robots,
+        all_logistic_robots = network.all_logistic_robots,
+        available_logistic_robots = network.available_logistic_robots,
+        all_construction_robots = network.all_construction_robots,
+        available_construction_robots = network.available_construction_robots
+    }
+    local item = logistic_trim(item_name)
+    if item ~= "" then
+        if not prototypes.item[item] then
+            result.ok = false
+            result.error = "unknown item '" .. item .. "'"
+            return result
+        end
+        result.item = item
+        result.count = network.get_item_count(item)
+        return result
+    end
+    local contents = logistic_contents(network.get_contents())
+    local visible = {}
+    for index = 1, math.min(#contents, 40) do
+        visible[#visible + 1] = contents[index]
+    end
+    result.items = visible
+    result.item_count = #contents
+    return result
+end
+
+local function logistic_list_chests(bot, x, y, radius)
+    local position = logistic_target_position(bot, x, y)
+    local found = bot.surface.find_entities_filtered{
+        position = position,
+        radius = radius,
+        force = bot.force,
+        type = {"logistic-container", "roboport"}
+    }
+    local chests = {}
+    for _, entity in ipairs(found) do
+        if entity.valid and entity.unit_number then
+            chests[#chests + 1] = {
+                name = entity.name,
+                unit_number = entity.unit_number,
+                x = math.floor(entity.position.x * 10) / 10,
+                y = math.floor(entity.position.y * 10) / 10,
+                distance = math.floor(logistic_distance(position, entity.position) * 10) / 10,
+                logistic_mode = (entity.prototype.logistic_mode or "roboport"),
+                items = logistic_entity_contents(entity)
+            }
+        end
+    end
+    table.sort(chests, function(a, b) return a.distance < b.distance end)
+    local visible = {}
+    for index = 1, math.min(#chests, 50) do
+        visible[#visible + 1] = chests[index]
+    end
+    return {
+        ok = true,
+        position = {x = math.floor(position.x * 10) / 10, y = math.floor(position.y * 10) / 10},
+        radius = radius,
+        chests = visible,
+        total = #chests
+    }
+end
+
+local function logistic_inspect_chest(bot, x, y)
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x == nil or position_y == nil then
+        return {ok = false, error = "x and y are required"}
+    end
+    local entity = logistic_find_entity(bot, {x = position_x, y = position_y}, {"logistic-container", "roboport"}, 1.5)
+    if not entity then
+        return {ok = false, error = "no logistic chest or roboport at this position"}
+    end
+    local result = {
+        ok = true,
+        name = entity.name,
+        unit_number = entity.unit_number,
+        type = entity.type,
+        logistic_mode = (entity.prototype.logistic_mode or "roboport"),
+        x = math.floor(entity.position.x * 10) / 10,
+        y = math.floor(entity.position.y * 10) / 10,
+        distance = math.floor(logistic_distance(bot.position, entity.position) * 10) / 10,
+        items = logistic_entity_contents(entity)
+    }
+    if entity.type == "logistic-container" then
+        if entity.name == "storage-chest" then
+            local filter = entity.storage_filter
+            if filter then
+                result.storage_filter = {
+                    name = filter.name and filter.name.name or nil,
+                    quality = filter.quality and filter.quality.name or "normal"
+                }
+            end
+        elseif entity.name == "requester-chest" then
+            result.request_from_buffers = entity.request_from_buffers and true or false
+        end
+        if entity.name == "requester-chest" or entity.name == "buffer-chest" then
+            result.requests = logistic_point_requests(entity)
+        end
+    end
+    return result
+end
+
+local function logistic_set_chest_request(bot, x, y, item_name, min_count, max_count, request_from_buffers)
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x == nil or position_y == nil then
+        return {ok = false, error = "x and y are required"}
+    end
+    local entity = logistic_find_entity(bot, {x = position_x, y = position_y}, "logistic-container", 1.5)
+    if not entity then return {ok = false, error = "no logistic chest at this position"} end
+    if entity.name ~= "requester-chest" and entity.name ~= "buffer-chest" then
+        return {ok = false, error = entity.name .. " does not take item requests; use a requester or buffer chest"}
+    end
+    local range_error = logistic_range_error(bot, entity.position)
+    if range_error then return {ok = false, error = range_error} end
+    local item = logistic_trim(item_name)
+    if item == "" then return {ok = false, error = "item_name is required"} end
+    if not prototypes.item[item] then return {ok = false, error = "unknown item '" .. item .. "'"} end
+    local minimum = tonumber(min_count)
+    if minimum == nil or minimum < 0 then minimum = 0 end
+    minimum = math.floor(minimum)
+    local maximum = tonumber(max_count)
+    if maximum ~= nil then
+        maximum = math.floor(maximum)
+        if maximum <= 0 then maximum = nil end
+        if maximum ~= nil and maximum < minimum then
+            return {ok = false, error = "max_count must be greater than or equal to min_count"}
+        end
+    end
+    local point, point_error = logistic_requester_point(entity)
+    if not point then return {ok = false, error = point_error} end
+    local section, section_error = logistic_requester_section(point)
+    if not section then return {ok = false, error = section_error} end
+    local filters = section.filters
+    local slot = nil
+    for index = 1, #filters do
+        local filter = filters[index]
+        if filter and filter.value and filter.value.name == item then
+            slot = index
+            break
+        end
+    end
+    if not slot then slot = #filters + 1 end
+    local filter = {value = {type = "item", name = item, quality = "normal"}, min = minimum}
+    if maximum then filter.max = maximum end
+    local ok, set_error = pcall(function() section.set_slot(slot, filter) end)
+    if not ok then return {ok = false, error = tostring(set_error)} end
+    local readback = section.get_slot(slot)
+    if not (readback and readback.value and readback.value.name == item) then
+        return {ok = false, error = "the request did not stick"}
+    end
+    local request_from_buffers_state = nil
+    if entity.name == "requester-chest" then
+        request_from_buffers_state = entity.request_from_buffers and true or false
+        local requested = logistic_parse_boolean(request_from_buffers)
+        if requested ~= nil then
+            entity.request_from_buffers = requested
+            request_from_buffers_state = entity.request_from_buffers and true or false
+        end
+    end
+    return {
+        ok = true,
+        name = entity.name,
+        x = math.floor(entity.position.x * 10) / 10,
+        y = math.floor(entity.position.y * 10) / 10,
+        item = item,
+        min = minimum,
+        max = maximum,
+        request_from_buffers = request_from_buffers_state,
+        requests = logistic_point_requests(entity)
+    }
+end
+
+local function logistic_clear_chest_request(bot, x, y, item_name)
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x == nil or position_y == nil then
+        return {ok = false, error = "x and y are required"}
+    end
+    local entity = logistic_find_entity(bot, {x = position_x, y = position_y}, "logistic-container", 1.5)
+    if not entity then return {ok = false, error = "no logistic chest at this position"} end
+    if entity.name ~= "requester-chest" and entity.name ~= "buffer-chest" then
+        return {ok = false, error = entity.name .. " does not take item requests; use a requester or buffer chest"}
+    end
+    local range_error = logistic_range_error(bot, entity.position)
+    if range_error then return {ok = false, error = range_error} end
+    local item = logistic_trim(item_name)
+    if item == "" then return {ok = false, error = "item_name is required"} end
+    local point, point_error = logistic_requester_point(entity)
+    if not point then return {ok = false, error = point_error} end
+    local section, section_error = logistic_requester_section(point)
+    if not section then return {ok = false, error = section_error} end
+    local filters = section.filters
+    local cleared = 0
+    for index = #filters, 1, -1 do
+        local filter = filters[index]
+        if filter and filter.value and filter.value.name == item then
+            local ok = pcall(function() section.clear_slot(index) end)
+            if ok then cleared = cleared + 1 end
+        end
+    end
+    if cleared == 0 then return {ok = false, error = "no request for '" .. item .. "' on this chest"} end
+    return {
+        ok = true,
+        name = entity.name,
+        x = math.floor(entity.position.x * 10) / 10,
+        y = math.floor(entity.position.y * 10) / 10,
+        item = item,
+        cleared = cleared,
+        requests = logistic_point_requests(entity)
+    }
+end
+
+local function logistic_set_storage_filter(bot, x, y, item_name)
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x == nil or position_y == nil then
+        return {ok = false, error = "x and y are required"}
+    end
+    local entity = logistic_find_entity(bot, {x = position_x, y = position_y}, "logistic-container", 1.5)
+    if not entity then return {ok = false, error = "no logistic chest at this position"} end
+    if entity.name ~= "storage-chest" then
+        return {ok = false, error = entity.name .. " has no storage filter; use a storage chest"}
+    end
+    local range_error = logistic_range_error(bot, entity.position)
+    if range_error then return {ok = false, error = range_error} end
+    local item = logistic_trim(item_name)
+    if item == "" then
+        local ok = pcall(function() entity.storage_filter = nil end)
+        if not ok then return {ok = false, error = "the storage filter could not be cleared"} end
+        return {
+            ok = true,
+            name = entity.name,
+            x = math.floor(entity.position.x * 10) / 10,
+            y = math.floor(entity.position.y * 10) / 10,
+            cleared = true
+        }
+    end
+    if not prototypes.item[item] then return {ok = false, error = "unknown item '" .. item .. "'"} end
+    local ok, set_error = pcall(function() entity.storage_filter = item end)
+    if not ok then return {ok = false, error = tostring(set_error)} end
+    local filter = entity.storage_filter
+    local filter_name = filter and filter.name and filter.name.name or nil
+    if filter_name ~= item then
+        return {ok = false, error = "the storage filter did not stick"}
+    end
+    return {
+        ok = true,
+        name = entity.name,
+        x = math.floor(entity.position.x * 10) / 10,
+        y = math.floor(entity.position.y * 10) / 10,
+        item = item,
+        storage_filter = {
+            name = filter_name,
+            quality = filter.quality and filter.quality.name or "normal"
+        }
+    }
+end
+
+local function logistic_insert_robots(bot, x, y, item_name, count, radius)
+    local item = logistic_trim(item_name)
+    if item == "" then item = "logistic-robot" end
+    local inventory_index = LOGISTIC_ROBOT_INVENTORIES[item]
+    if not inventory_index then
+        return {ok = false, error = "insert_robots accepts logistic-robot, construction-robot or repair-pack"}
+    end
+    local port = nil
+    local position_x = tonumber(x)
+    local position_y = tonumber(y)
+    if position_x ~= nil and position_y ~= nil then
+        port = logistic_find_entity(bot, {x = position_x, y = position_y}, "roboport", 1.5)
+        if not port then return {ok = false, error = "no roboport at this position"} end
+    else
+        local roboports = bot.surface.find_entities_filtered{
+            type = "roboport",
+            position = bot.position,
+            radius = radius,
+            force = bot.force
+        }
+        local nearest_distance = nil
+        for _, roboport in ipairs(roboports) do
+            if roboport.valid then
+                local distance = logistic_distance(bot.position, roboport.position)
+                if not nearest_distance or distance < nearest_distance then
+                    port = roboport
+                    nearest_distance = distance
+                end
+            end
+        end
+        if not port then
+            return {ok = false, error = "no roboport within " .. tostring(radius) .. " tiles"}
+        end
+    end
+    local range_error = logistic_range_error(bot, port.position)
+    if range_error then return {ok = false, error = range_error} end
+    local inventory = port.get_inventory(inventory_index)
+    if not inventory then return {ok = false, error = "the roboport does not expose that inventory"} end
+    local main_inventory = bot.get_main_inventory()
+    local available = main_inventory and main_inventory.get_item_count(item) or 0
+    if available <= 0 then
+        return {ok = false, error = "'" .. item .. "' is not in the companion inventory"}
+    end
+    local wanted = tonumber(count)
+    if wanted == nil or wanted <= 0 then wanted = available end
+    wanted = math.min(math.floor(wanted), available)
+    local inserted = inventory.insert{name = item, count = wanted}
+    if inserted > 0 then
+        main_inventory.remove{name = item, count = inserted}
+    end
+    local result = {
+        ok = inserted > 0,
+        item = item,
+        inserted = inserted,
+        requested = wanted,
+        roboport = {
+            name = port.name,
+            unit_number = port.unit_number,
+            x = math.floor(port.position.x * 10) / 10,
+            y = math.floor(port.position.y * 10) / 10
+        },
+        stored = inventory.get_item_count(item)
+    }
+    if inserted == 0 then result.error = "the roboport inventory refused the items" end
+    return result
 end
 
 local function require(file, ...)
@@ -1580,6 +2110,37 @@ function ____exports.create_tools_remote_interface(self)
                         error = clear_error,
                         requests = point and personal_logistics_requests(point) or {}
                     }
+                else
+                    result = {ok = false, error = "unknown action '" .. what .. "'"}
+                end
+                rcon.print(helpers.table_to_json(result))
+                return true
+            end,
+
+            manage_logistic_network = function(action, x, y, radius, item_name, min_count, max_count, request_from_buffers)
+                local bot = get_companion_body()
+                if not (bot and bot.valid) then
+                    rcon.print('{"ok":false,"error":"no companion body"}')
+                    return false
+                end
+                local what = tostring(action or "network_status")
+                local scan_radius = tonumber(radius)
+                if scan_radius == nil or scan_radius <= 0 then scan_radius = 32 end
+                local result
+                if what == "network_status" then
+                    result = logistic_network_status(bot, x, y, item_name, scan_radius)
+                elseif what == "list_chests" then
+                    result = logistic_list_chests(bot, x, y, scan_radius)
+                elseif what == "inspect_chest" then
+                    result = logistic_inspect_chest(bot, x, y)
+                elseif what == "set_chest_request" then
+                    result = logistic_set_chest_request(bot, x, y, item_name, min_count, max_count, request_from_buffers)
+                elseif what == "clear_chest_request" then
+                    result = logistic_clear_chest_request(bot, x, y, item_name)
+                elseif what == "set_storage_filter" then
+                    result = logistic_set_storage_filter(bot, x, y, item_name)
+                elseif what == "insert_robots" then
+                    result = logistic_insert_robots(bot, x, y, item_name, min_count, scan_radius)
                 else
                     result = {ok = false, error = "unknown action '" .. what .. "'"}
                 end
