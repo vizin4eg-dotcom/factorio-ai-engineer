@@ -35,7 +35,41 @@ export interface LLMMessage {
 }
 
 export function parseLLMMessage(message: string): LLMMessage {
-  return JSON.parse(message) as LLMMessage
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(message)
+  }
+  catch (err) {
+    throw new Error(`LLM replied with malformed JSON (${(err as Error).message})`)
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+    throw new Error('LLM reply is not a JSON object')
+
+  // The model sometimes answers in its own shape (e.g. {"response": "..."}).
+  // Without this check the agent silently sends nothing to the game: chatMessage
+  // is undefined and operationCommands is missing.
+  const candidate = parsed as Partial<Record<keyof LLMMessage, unknown>>
+  const missing = (['plan', 'currentStep', 'chatMessage', 'operationCommands'] as const)
+    .filter(key => candidate[key] === undefined)
+  if (missing.length > 0)
+    throw new Error(`LLM reply does not match the output contract, missing: ${missing.join(', ')}`)
+
+  if (typeof candidate.chatMessage !== 'string')
+    throw new Error('LLM reply has a non-string chatMessage')
+  if (!Array.isArray(candidate.plan) || candidate.plan.some(step => typeof step !== 'string'))
+    throw new Error('LLM reply has a non-array plan')
+  if (!Array.isArray(candidate.operationCommands) || candidate.operationCommands.some(cmd => typeof cmd !== 'string'))
+    throw new Error('LLM reply has a non-array operationCommands')
+  if (typeof candidate.currentStep !== 'number' || !Number.isFinite(candidate.currentStep))
+    throw new Error('LLM reply has a non-numeric currentStep')
+
+  return {
+    chatMessage: candidate.chatMessage,
+    operationCommands: candidate.operationCommands,
+    plan: candidate.plan,
+    currentStep: candidate.currentStep,
+  }
 }
 
 export function parseCommandMessage(log: string): CommandMessage | null {

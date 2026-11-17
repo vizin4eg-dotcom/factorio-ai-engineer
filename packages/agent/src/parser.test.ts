@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { parseChatMessage, parseCommandMessage, parseModErrorMessage, parseOperationCompletedMessage } from './parser'
+import { parseChatMessage, parseCommandMessage, parseLLMMessage, parseModErrorMessage, parseOperationCompletedMessage } from './parser'
+
+describe('parseLLMMessage', () => {
+  it('should accept the documented output contract', () => {
+    const reply = JSON.stringify({ plan: ['step'], currentStep: 0, chatMessage: 'Привет!', operationCommands: [] })
+    expect(parseLLMMessage(reply)).toEqual({ plan: ['step'], currentStep: 0, chatMessage: 'Привет!', operationCommands: [] })
+  })
+
+  it('should drop unknown extra keys but keep the contract', () => {
+    const reply = JSON.stringify({ plan: [], currentStep: 0, chatMessage: 'ok', operationCommands: [], note: 'extra' })
+    expect(parseLLMMessage(reply)).toEqual({ plan: [], currentStep: 0, chatMessage: 'ok', operationCommands: [] })
+  })
+
+  it('should reject a reply in the model\'s own shape', () => {
+    expect(() => parseLLMMessage(JSON.stringify({ response: 'Привет' }))).toThrow(/missing: plan, currentStep, chatMessage, operationCommands/)
+  })
+
+  it('should reject malformed JSON', () => {
+    expect(() => parseLLMMessage('not json')).toThrow(/malformed JSON/)
+  })
+
+  it('should reject wrong field types', () => {
+    const reply = JSON.stringify({ plan: 'step', currentStep: '0', chatMessage: 'ok', operationCommands: [] })
+    expect(() => parseLLMMessage(reply)).toThrow(/non-array plan/)
+    const reply2 = JSON.stringify({ plan: [], currentStep: 0, chatMessage: 42, operationCommands: [] })
+    expect(() => parseLLMMessage(reply2)).toThrow(/non-string chatMessage/)
+    const reply3 = JSON.stringify({ plan: [], currentStep: 0, chatMessage: 'ok', operationCommands: 'x' })
+    expect(() => parseLLMMessage(reply3)).toThrow(/non-array operationCommands/)
+  })
+})
 
 describe('parseCommandMessage', () => {
   it('should parse player command', () => {

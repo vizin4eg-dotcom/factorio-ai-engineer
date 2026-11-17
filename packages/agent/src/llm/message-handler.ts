@@ -54,6 +54,17 @@ export async function createMessageHandler() {
 
   const messages: Message[] = [system(prompt)]
 
+  /**
+   * Queue a user turn, skipping an exact repeat of the previous one: a retry in
+   * main.ts re-delivers the same event, and duplicated turns derail the model.
+   */
+  function pushUser(content: string) {
+    const last = messages[messages.length - 1]
+    if (last?.role === 'user' && typeof last.content === 'string' && last.content === content)
+      return
+    messages.push(user(content))
+  }
+
   async function handleMessage(message: StdoutMessage) {
     logger.withFields({ message }).debug('Handling message')
 
@@ -72,13 +83,13 @@ export async function createMessageHandler() {
         logger.withFields({ err }).warn('Failed to fetch automatic observation')
       }
 
-      messages.push(user(`[CHAT] ${message.message}${currentObservation}`))
+      pushUser(`[CHAT] ${message.message}${currentObservation}`)
     }
     else if (message.type === 'modError') {
-      messages.push(user(`[MOD] Error: ${message.error}`))
+      pushUser(`[MOD] Error: ${message.error}`)
     }
     else if (message.type === 'operationsCompleted') {
-      messages.push(user(`[MOD] All operations completed`))
+      pushUser(`[MOD] All operations completed`)
     }
 
     // Защита: отсекаем хвост модели при повторных попытках
@@ -86,54 +97,68 @@ export async function createMessageHandler() {
       messages.pop()
     }
 
-    // Вызываем агента
-    const response = await agent.call([...messages], {
-      model: openaiConfig.model || DEFAULT_MODEL,
-      maxRoundTrip: 5,
-    })
+    // The model occasionally answers in its own shape ({"response": "..."}) or
+    // wraps the reply in prose. One correction round is cheaper than letting the
+    // turn die: the wrong reply is shown back to the model with the contract.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const response = await agent.call([...messages], {
+        model: openaiConfig.model || DEFAULT_MODEL,
+        maxRoundTrip: 5,
+      })
 
-    // Временная отладка: смотрим, что лежит в ответе агента
-    // console.log('[DEBUG_RESPONSE]', JSON.stringify(response, null, 2))
+      // Снимаем статистику токенов из ответа агента
+      if (response) {
+        // Провайдеры отдают usage в разных формах; neuri типизирует только snake_case.
+        const usage = response.usage as unknown as Record<string, number | undefined> | undefined
+        if (usage) {
+          tokenTracker.recordUsage({
+            promptTokens: usage.prompt_tokens ?? usage.promptTokens ?? usage.promptTokenCount,
+            completionTokens: usage.completion_tokens ?? usage.completionTokens ?? usage.candidatesTokenCount,
+          })
+        }
+      }
 
-    // Снимаем статистику токенов из ответа агента
-    if (response) {
-      // Провайдеры отдают usage в разных формах; neuri типизирует только snake_case.
-      const usage = response.usage as unknown as Record<string, number | undefined> | undefined
-      if (usage) {
-        tokenTracker.recordUsage({
-          promptTokens: usage.prompt_tokens ?? usage.promptTokens ?? usage.promptTokenCount,
-          completionTokens: usage.completion_tokens ?? usage.completionTokens ?? usage.candidatesTokenCount,
-        })
+      if (!response) {
+        logger.withFields({ response }).error('LLM responded with null')
+        return null
+      }
+
+      if (!response.choices || !response.choices.length) {
+        logger.withFields({ response }).error('LLM responded with no choices')
+        return null
+      }
+
+      const messageFromLLM = response.choices[0].message.content
+      logger.withFields({ messageFromLLM }).debug('Message response from LLM')
+      if (!messageFromLLM) {
+        return null
+      }
+
+      // Очищаем ответ от маркдаун-оберток ```json ... ``` которые любят выдавать локальные модели
+      const cleanedContent = messageFromLLM
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/, '')
+        .trim()
+
+      try {
+        const parsedMessage = parseLLMMessage(cleanedContent)
+        messages.push(assistant(`${JSON.stringify(parsedMessage)}`))
+        return parsedMessage
+      }
+      catch (err) {
+        const reason = (err as Error).message
+        logger.withFields({ attempt, reason }).warn('LLM reply rejected')
+        // This line is the only trace the user sees when the agent goes silent.
+        logger.error(`LLM reply rejected: ${reason}`)
+        if (attempt === 2)
+          return null
+
+        pushUser(`[SYSTEM] Your previous reply was rejected: ${reason}. Reply again with ONLY the raw JSON object, all four keys: {"plan": [...], "currentStep": 0, "chatMessage": "...", "operationCommands": [...]}.`)
       }
     }
 
-    if (!response) {
-      logger.withFields({ response }).error('LLM responded with null')
-      return null
-    }
-
-    if (!response.choices || !response.choices.length) {
-      logger.withFields({ response }).error('LLM responded with no choices')
-      return null
-    }
-
-    const messageFromLLM = response.choices[0].message.content
-    logger.withFields({ messageFromLLM }).debug('Message response from LLM')
-    if (!messageFromLLM) {
-      return null
-    }
-
-    // Очищаем ответ от маркдаун-оберток ```json ... ``` которые любят выдавать локальные модели
-    const cleanedContent = messageFromLLM
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/, '')
-      .trim()
-
-    const parsedMessage = parseLLMMessage(cleanedContent)
-    messages.push(assistant(`${JSON.stringify(parsedMessage)}`))
-
-    return parsedMessage
+    return null
   }
 
   return {

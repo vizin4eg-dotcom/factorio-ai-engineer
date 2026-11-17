@@ -101,7 +101,7 @@ Factorio 2.0 API notes (verified live on 2.0.77 against the companion, unit 1455
 1. Wrapper forwards a stdout line.
 2. `parser.ts` classifies `[CHAT]`, `[AUTORIO] [ERROR]`, or `[AUTORIO] All operations completed`. Anything else is ignored. `game.print` is **not** a completion signal. `log("[AUTORIO] ...")` is, if it matches those two patterns exactly. Keep that spelling if you want the agent to notice.
 3. On chat, the handler prefetches `scan_entities(25)` (which already embeds power / boiler / bot telemetry) and appends it to the user message. Inventory, footprint and threats are tool calls, not prefetched.
-4. Model replies with JSON: `plan`, `currentStep`, `chatMessage`, `operationCommands[]`. No markdown fence. `parseLLMMessage` is a bare `JSON.parse`.
+4. Model replies with JSON: `plan`, `currentStep`, `chatMessage`, `operationCommands[]`. No markdown fence. `parseLLMMessage` validates that contract: a reply in the model's own shape (`{"response": "..."}`) is rejected, the handler shows the model its own reply plus the required keys and asks once more, and logs `LLM reply rejected: ...`. Keep that loud — a silent turn is a bug, not a quirk.
 5. Host `game.print`s `chatMessage`, then joins `operationCommands` with `;` into one `/sc`.
 
 Consequences:
@@ -113,6 +113,18 @@ Consequences:
 - Tool round-trips (`maxRoundTrip: 3`) and `operationCommands` are two action channels. The prompt already says "do not also call a tool for the same action". Prefer not exposing the action as a tool at all.
 - `getRecipe` and `scanEntities` in `tools.ts` used to destructure `{ parameters }` while the schema is flat. Fixed: every tool now reads top-level fields (`item`, `radius`). Keep new tools on the flat schema.
 - Model id has one source of truth: `DEFAULT_MODEL` in `config.ts` (`deepseek/deepseek-v4.1-flash-1017`), overridden by `OPENAI_MODEL_NAME`. OpenRouter provider routing (`provider.order`, `allow_fallbacks`) lives in the `composeAgent` provider options, because `neuri.call()` forwards only `model` and `maxRoundTrip`. `provider.order` is no longer hardcoded: `OPENROUTER_PROVIDER_ORDER` (comma-separated or a JSON array, parsed by `parseProviderOrder`) sets it, and an empty value sends no override so OpenRouter routes normally. Put the local value in `packages/agent/.env` (gitignored), never in `message-handler.ts`.
+
+## When the agent goes silent (2026-11-17)
+
+The player sends a chat message and nothing happens in game. Two causes were seen live on the same day:
+
+1. **The RCON bridge cannot authenticate.** `docker logs factorio-rcon-api` is the first place to look:
+   - `rcon: authentication failed` — the container holds a password the running server does not have.
+   - `rcon: invalid authentication packet type response` — the connection reached something else on port 27015. Docker Desktop's `host.docker.internal` loops back to the host's `127.0.0.1`, where `AppleMobileDeviceService.exe` (Apple Devices / iTunes) listens on 27015 and answers with its own protocol. Set `FACTORIO_RCON_HOST` in `packages/agent/.env.local` to the host LAN address; a healthy container logs `RCON connection established successfully`.
+   - Check with `Get-NetTCPConnection -LocalPort 27015 -State Listen`: Factorio binds `0.0.0.0`, the squatter binds `127.0.0.1`.
+2. **The model replied in its own JSON shape.** Covered above: `parseLLMMessage` rejects it, one correction round follows, and `LLM reply rejected: ...` is logged.
+
+The password is read only at startup, it reaches the server as part of its argv (`--rcon-password`), and `game.reload_mods()` does not re-read it: after changing it, restart the Factorio server and the bridge container. `start_all.ps1` reads `FACTORIO_RCON_PASSWORD`/`FACTORIO_RCON_HOST` from the environment first, so a stale exported variable there overrides `.env.local`.
 
 ## How to add a behavior
 
